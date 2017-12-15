@@ -709,6 +709,7 @@ void FBuild::DisplayTargetList() const
             case Node::REMOVE_DIR_NODE:     break;
             case Node::XCODEPROJECT_NODE:   break;
             case Node::SETTINGS_NODE:       break;
+			case Node::VSCODEPROJECT_NODE:	break;
             case Node::NUM_NODE_TYPES:      ASSERT( false );                        break;
         }
         if ( displayName )

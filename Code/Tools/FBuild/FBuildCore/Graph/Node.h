@@ -87,6 +87,7 @@ public:
         REMOVE_DIR_NODE     = 18,
         XCODEPROJECT_NODE   = 19,
         SETTINGS_NODE       = 20,
+		VSCODEPROJECT_NODE	= 21,
         // Make sure you update 's_NodeTypeNames' in the cpp
         NUM_NODE_TYPES      // leave this last
     };
@@ -196,6 +197,7 @@ protected:
     friend class ProjectGeneratorBase; // TODO:C Remove this
     friend class Report;
     friend class VSProjectConfig; // TODO:C Remove this
+	friend class VSCodeProjectConfig; // TODO:C Remove this
     friend class WorkerThread;
 
     inline const Dependencies & GetPreBuildDependencies() const { return m_PreBuildDependencies; }

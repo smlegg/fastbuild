@@ -6,6 +6,7 @@
 //------------------------------------------------------------------------------
 #include "Tools/FBuild/FBuildCore/Helpers/SLNGenerator.h"
 #include "Tools/FBuild/FBuildCore/Helpers/VSProjectGenerator.h"
+#include "Tools/FBuild/FBuildCore/Helpers/VSCodeProjectGenerator.h"
 
 #include "Core/Containers/Array.h"
 #include "Core/Strings/AString.h"
@@ -38,6 +39,7 @@ class TestNode;
 class UnityNode;
 class VCXProjectNode;
 class XCodeProjectNode;
+class VSCodeProjectNode;
 
 // NodeGraphHeader
 //------------------------------------------------------------------------------
@@ -147,6 +149,8 @@ public:
     ObjectListNode * CreateObjectListNode( const AString & listName );
     XCodeProjectNode * CreateXCodeProjectNode( const AString & name );
     SettingsNode * CreateSettingsNode( const AString & name );
+	VSCodeProjectNode * CreateVSCodeProjectNode( const AString & projectOutput,
+												 const Array< VSCodeProjectConfig > & configs );
 
     void DoBuildPass( Node * nodeToBuild );
 

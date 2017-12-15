@@ -26,6 +26,7 @@
 #include "FunctionUsing.h"
 #include "FunctionVCXProject.h"
 #include "FunctionXCodeProject.h"
+#include "FunctionVSCodeProject.h"
 
 #include "Tools/FBuild/FBuildCore/BFF/BFFIterator.h"
 #include "Tools/FBuild/FBuildCore/BFF/BFFParser.h"
@@ -126,6 +127,7 @@ Function::~Function() = default;
     FNEW( FunctionVCXProject );
     FNEW( FunctionObjectList );
     FNEW( FunctionXCodeProject );
+	FNEW( FunctionVSCodeProject );
 }
 
 // Destroy

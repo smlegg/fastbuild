@@ -33,6 +33,7 @@
 #include "UnityNode.h"
 #include "VCXProjectNode.h"
 #include "XCodeProjectNode.h"
+#include "VSCodeProjectNode.h"
 
 // Core
 #include "Core/Containers/AutoPtr.h"
@@ -952,6 +953,22 @@ SettingsNode * NodeGraph::CreateSettingsNode( const AString & name )
     node->SetName( name );
     AddNode( node );
     return node;
+}
+
+// CreateVSCodeProjectNode
+//------------------------------------------------------------------------------
+
+VSCodeProjectNode * NodeGraph::CreateVSCodeProjectNode( const AString & projectOutput,
+														const Array< VSCodeProjectConfig > & configs )
+{
+	ASSERT( Thread::IsMainThread() );
+
+	AStackString< 1024 > fullPath;
+	CleanPath( projectOutput, fullPath );
+
+	VSCodeProjectNode * node = FNEW( VSCodeProjectNode( fullPath, configs ) );
+	AddNode( node );
+	return node;
 }
 
 // AddNode

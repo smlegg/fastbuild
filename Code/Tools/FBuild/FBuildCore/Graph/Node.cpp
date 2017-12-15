@@ -33,6 +33,7 @@
 #include "Tools/FBuild/FBuildCore/Graph/UnityNode.h"
 #include "Tools/FBuild/FBuildCore/Graph/VCXProjectNode.h"
 #include "Tools/FBuild/FBuildCore/Graph/XCodeProjectNode.h"
+#include "Tools/FBuild/FBuildCore/Graph/VSCodeProjectNode.h"
 #include "Tools/FBuild/FBuildCore/Graph/MetaData/Meta_Name.h"
 #include "Tools/FBuild/FBuildCore/Graph/MetaData/Meta_AllowNonFile.h"
 #include "Tools/FBuild/FBuildCore/WorkerPool/Job.h"
@@ -75,6 +76,7 @@
     "RemoveDir",
     "XCodeProj",
     "Settings",
+	"VSCodeProj"
 };
 
 // Custom MetaData
@@ -438,6 +440,7 @@ bool Node::DetermineNeedToBuild( bool forceClean ) const
         case Node::REMOVE_DIR_NODE:     n = RemoveDirNode::Load( nodeGraph, stream );       break;
         case Node::XCODEPROJECT_NODE:   n = XCodeProjectNode::Load( nodeGraph, stream );    break;
         case Node::SETTINGS_NODE:       n = SettingsNode::Load( nodeGraph, stream );        break;
+		case Node::VSCODEPROJECT_NODE:	n = VSCodeProjectNode::Load( nodeGraph, stream );	break;
         case Node::NUM_NODE_TYPES:      ASSERT( false );                        break;
     }
 
