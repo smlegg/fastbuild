@@ -15,8 +15,8 @@
 // CONSTRUCTOR (VSCodeProjectConfig)
 //------------------------------------------------------------------------------
 VSCodeProjectConfig::VSCodeProjectConfig()
-	: m_Target(nullptr)
-	, m_LimitSymbolsToIncludedHeaders(true)
+	: m_LimitSymbolsToIncludedHeaders(true)
+	, m_Target(nullptr)
 {
 }
 
