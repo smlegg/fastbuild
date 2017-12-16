@@ -176,7 +176,7 @@ const AString & VSCodeProjectGenerator::Generate( const Array< VSCodeProjectConf
 
 	Write( "\n\t],\n" );
 
-	Write( "\t\"version\": 2\n" );
+	Write( "\t\"version\": 3\n" );
 	Write( "}\n" );
 
 	return m_Tmp;
