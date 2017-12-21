@@ -32,7 +32,7 @@ public:
 private:
 	virtual BuildResult DoBuild( Job * job ) override;
 
+	Array< VSCodeProjectConfig > m_Configs;
 	AString m_ProjectPath;
 	AString m_ProjectName;
-	Array< VSCodeProjectConfig > m_Configs;
 };
