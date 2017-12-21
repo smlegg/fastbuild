@@ -7,6 +7,7 @@
 #include "Tools/FBuild/FBuildCore/Helpers/SLNGenerator.h"
 #include "Tools/FBuild/FBuildCore/Helpers/VSProjectGenerator.h"
 #include "Tools/FBuild/FBuildCore/Helpers/VSCodeProjectGenerator.h"
+#include "Tools/FBuild/FBuildCore/Helpers/VSCodeWorkspaceGenerator.h"
 
 #include "Core/Containers/Array.h"
 #include "Core/Strings/AString.h"
@@ -155,7 +156,8 @@ public:
 												 const AString & projectName,
 												 const Array< VSCodeProjectConfig > & configs );
 	VSCodeWorkspaceNode * CreateVSCodeWorkspaceNode( const AString & workspaceOutput,
-													 const Array< VSCodeProjectNode * > & projects );
+													 const Array< VSCodeProjectNode * > & projects,
+                                                     const Array< VSCodeWorkspaceFolder > & folders );
 
     void DoBuildPass( Node * nodeToBuild );
 

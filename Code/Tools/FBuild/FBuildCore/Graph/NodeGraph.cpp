@@ -978,14 +978,15 @@ VSCodeProjectNode * NodeGraph::CreateVSCodeProjectNode( const AString & projectO
 // CreateVSCodeWorkspaceNode
 //------------------------------------------------------------------------------
 VSCodeWorkspaceNode * NodeGraph::CreateVSCodeWorkspaceNode( const AString & workspaceOutput,
-															const Array< VSCodeProjectNode * > & projects )
+															const Array< VSCodeProjectNode * > & projects,
+                                                            const Array< VSCodeWorkspaceFolder > & folders )
 {
 	ASSERT( Thread::IsMainThread() );
 
 	AStackString< 1024 > fullPath;
 	CleanPath( workspaceOutput, fullPath );
 
-	VSCodeWorkspaceNode * node = FNEW( VSCodeWorkspaceNode( fullPath, projects ) );
+	VSCodeWorkspaceNode * node = FNEW( VSCodeWorkspaceNode( fullPath, projects, folders ) );
 	AddNode( node );
 	return node;
 }

@@ -7,6 +7,8 @@
 
 // FBuild
 #include "FunctionVSCodeWorkspace.h"
+#include "Tools/FBuild/FBuildCore/BFF/BFFStackFrame.h"
+#include "Tools/FBuild/FBuildCore/BFF/BFFVariable.h"
 #include "Tools/FBuild/FBuildCore/Graph/AliasNode.h"
 #include "Tools/FBuild/FBuildCore/Graph/NodeGraph.h"
 #include "Tools/FBuild/FBuildCore/Graph/VSCodeProjectNode.h"
@@ -112,8 +114,65 @@ VSCodeProjectNode * FunctionVSCodeWorkspace::ResolveVSCodeProject( NodeGraph & n
 		projects.Append( project );
 	}
 
-	VSCodeWorkspaceNode * wn = nodeGraph.CreateVSCodeWorkspaceNode( workspaceOutput, projects );
+	Array< VSCodeWorkspaceFolder > folders( 16, true );
+	const BFFVariable * workspaceFolders = BFFStackFrame::GetVar( ".WorkspaceFolders" );
+	if ( workspaceFolders )
+	{
+		if ( workspaceFolders->IsArrayOfStructs() == false )
+		{
+			Error::Error_1050_PropertyMustBeOfType( funcStartIter, this, ".WorkspaceFolders", workspaceFolders->GetType(), BFFVariable::VAR_ARRAY_OF_STRUCTS );
+			return false;
+		}
+
+		const Array< const BFFVariable * > & structs = workspaceFolders->GetArrayOfStructs();
+		const BFFVariable * const * end = structs.End();
+		for ( const BFFVariable ** it = structs.Begin(); it != end; ++it )
+		{
+			const BFFVariable * s = *it;
+
+			VSCodeWorkspaceFolder newFolder;
+
+			AStackString<> path;
+
+			// .Path must be provided
+			if ( !GetStringFromStruct( s, ".Path", path ))
+			{
+				// TODO:B custom error
+				Error::Error_1101_MissingProperty( funcStartIter, this, AStackString<>( ".Path" ) );
+				return false;
+			}
+			NodeGraph::CleanPath( path, newFolder.m_Path );
+
+			GetStringFromStruct( s, ".Name", newFolder.m_Name );
+
+			folders.Append( newFolder );
+		}
+	}
+
+	VSCodeWorkspaceNode * wn = nodeGraph.CreateVSCodeWorkspaceNode( workspaceOutput, projects, folders );
 	ASSERT( wn );
 
 	return ProcessAlias( nodeGraph, funcStartIter, wn );
+}
+
+// GetStringFromStruct
+//------------------------------------------------------------------------------
+bool FunctionVSCodeWorkspace::GetStringFromStruct( const BFFVariable * s, const char * name, AString & result ) const
+{
+	const Array< const BFFVariable * > & members = s->GetStructMembers();
+	const BFFVariable * const * end = members.End();
+	for ( const BFFVariable ** it = members.Begin(); it != end; ++it )
+	{
+		const BFFVariable * v = *it;
+		if ( v->IsString() == false )
+		{
+			continue; // ignore non-strings
+		}
+		if ( v->GetName() == name )
+		{
+			result = v->GetString();
+			return true; // found
+		}
+	}
+	return false; // not found - caller decides if this is an error
 }

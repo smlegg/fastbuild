@@ -14,8 +14,10 @@
 // CONSTRUCTOR
 //------------------------------------------------------------------------------
 VSCodeWorkspaceNode::VSCodeWorkspaceNode( const AString & workspaceOutput,
-										  const Array< VSCodeProjectNode * > & projects )
+										  const Array< VSCodeProjectNode * > & projects,
+										  const Array< VSCodeWorkspaceFolder> & folders )
 : FileNode( workspaceOutput, Node::FLAG_NONE )
+, m_Folders( folders )
 {
 	m_LastBuildTimeMs = 100; // higher default than a file node
 	m_Type = Node::VSCODEWORKSPACE_NODE;
@@ -45,7 +47,7 @@ VSCodeWorkspaceNode::~VSCodeWorkspaceNode() = default;
 	}
 
 	// Generate output file
-	const AString & output = g.Generate( projects );
+	const AString & output = g.Generate( projects, m_Folders );
 	if ( ProjectGeneratorBase::WriteIfDifferent( "VSCodeWorkspace", output, m_Name ) == false )
 	{
 		return Node::NODE_RESULT_FAILED; // WriteIfDifferent will have emitted an error
@@ -68,8 +70,12 @@ VSCodeWorkspaceNode::~VSCodeWorkspaceNode() = default;
 		projects.Append( it->GetNode()->CastTo< VSCodeProjectNode >() );
 	}
 
+	Array< VSCodeWorkspaceFolder > folders;
+	VSCodeWorkspaceFolder::Load( stream, folders );
+
 	VSCodeWorkspaceNode * n = nodeGraph.CreateVSCodeWorkspaceNode( name,
-																   projects );
+																   projects,
+																   folders );
 	return n;
 }
 
@@ -79,4 +85,5 @@ VSCodeWorkspaceNode::~VSCodeWorkspaceNode() = default;
 {
 	NODE_SAVE( m_Name );
 	NODE_SAVE_DEPS( m_StaticDependencies );
+	VSCodeWorkspaceFolder::Save( stream, m_Folders );
 }
