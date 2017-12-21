@@ -364,7 +364,7 @@ void ProjectGeneratorBase::AddConfig( const AString & name, const Node * targetN
         AStackString<> optionBody;
 
         // Handle space between option and payload
-        if ( ( token == option ) || ( token == alternateOption ) )
+        if ( ( token == option ) || ( alternateOption && token == alternateOption ) )
         {
             // Handle an incomplete token at the end of list
             if ( i == ( tokens.GetSize() - 1 ) )

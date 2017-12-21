@@ -122,6 +122,7 @@ const AString & VSCodeProjectGenerator::Generate( const Array< VSCodeProjectConf
 		{
 			if ( oln )
 			{
+				ProjectGeneratorBase::ExtractIntellisenseOptions( oln->GetCompilerOptions(), "-isystem", nullptr, extractedIncludePaths, false );
 				ProjectGeneratorBase::ExtractIntellisenseOptions( oln->GetCompilerOptions(), "/I", "-I", extractedIncludePaths, false );
 			}
 			includePaths = &extractedIncludePaths;
