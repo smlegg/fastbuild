@@ -34,6 +34,7 @@
 #include "Tools/FBuild/FBuildCore/Graph/VCXProjectNode.h"
 #include "Tools/FBuild/FBuildCore/Graph/XCodeProjectNode.h"
 #include "Tools/FBuild/FBuildCore/Graph/VSCodeProjectNode.h"
+#include "Tools/FBuild/FBuildCore/Graph/VSCodeWorkspaceNode.h"
 #include "Tools/FBuild/FBuildCore/Graph/MetaData/Meta_Name.h"
 #include "Tools/FBuild/FBuildCore/Graph/MetaData/Meta_AllowNonFile.h"
 #include "Tools/FBuild/FBuildCore/WorkerPool/Job.h"
@@ -76,7 +77,8 @@
     "RemoveDir",
     "XCodeProj",
     "Settings",
-	"VSCodeProj"
+	"VSCodeProj",
+	"VSCodeWorkspace"
 };
 
 // Custom MetaData
@@ -419,29 +421,30 @@ bool Node::DetermineNeedToBuild( bool forceClean ) const
     Node * n = nullptr;
     switch ( (Node::Type)nodeType )
     {
-        case Node::PROXY_NODE:          ASSERT( false );                                    break;
-        case Node::COPY_FILE_NODE:      n = CopyFileNode::Load( nodeGraph, stream );        break;
-        case Node::DIRECTORY_LIST_NODE: n = DirectoryListNode::Load( nodeGraph, stream );   break;
-        case Node::EXEC_NODE:           n = ExecNode::Load( nodeGraph, stream );            break;
-        case Node::FILE_NODE:           n = FileNode::Load( nodeGraph, stream );            break;
-        case Node::LIBRARY_NODE:        n = LibraryNode::Load( nodeGraph, stream );         break;
-        case Node::OBJECT_NODE:         n = ObjectNode::Load( nodeGraph, stream );          break;
-        case Node::ALIAS_NODE:          n = AliasNode::Load( nodeGraph, stream );           break;
-        case Node::EXE_NODE:            n = ExeNode::Load( nodeGraph, stream );             break;
-        case Node::CS_NODE:             n = CSNode::Load( nodeGraph, stream );              break;
-        case Node::UNITY_NODE:          n = UnityNode::Load( nodeGraph, stream );           break;
-        case Node::TEST_NODE:           n = TestNode::Load( nodeGraph, stream );            break;
-        case Node::COMPILER_NODE:       n = CompilerNode::Load( nodeGraph, stream );        break;
-        case Node::DLL_NODE:            n = DLLNode::Load( nodeGraph, stream );             break;
-        case Node::VCXPROJECT_NODE:     n = VCXProjectNode::Load( nodeGraph, stream );      break;
-        case Node::OBJECT_LIST_NODE:    n = ObjectListNode::Load( nodeGraph, stream );      break;
-        case Node::COPY_DIR_NODE:       n = CopyDirNode::Load( nodeGraph, stream );         break;
-        case Node::SLN_NODE:            n = SLNNode::Load( nodeGraph, stream );             break;
-        case Node::REMOVE_DIR_NODE:     n = RemoveDirNode::Load( nodeGraph, stream );       break;
-        case Node::XCODEPROJECT_NODE:   n = XCodeProjectNode::Load( nodeGraph, stream );    break;
-        case Node::SETTINGS_NODE:       n = SettingsNode::Load( nodeGraph, stream );        break;
-		case Node::VSCODEPROJECT_NODE:	n = VSCodeProjectNode::Load( nodeGraph, stream );	break;
-        case Node::NUM_NODE_TYPES:      ASSERT( false );                        break;
+        case Node::PROXY_NODE:				ASSERT( false );                                    break;
+        case Node::COPY_FILE_NODE:			n = CopyFileNode::Load( nodeGraph, stream );        break;
+        case Node::DIRECTORY_LIST_NODE:		n = DirectoryListNode::Load( nodeGraph, stream );   break;
+        case Node::EXEC_NODE:				n = ExecNode::Load( nodeGraph, stream );            break;
+        case Node::FILE_NODE:				n = FileNode::Load( nodeGraph, stream );            break;
+        case Node::LIBRARY_NODE:			n = LibraryNode::Load( nodeGraph, stream );         break;
+        case Node::OBJECT_NODE:				n = ObjectNode::Load( nodeGraph, stream );          break;
+        case Node::ALIAS_NODE:				n = AliasNode::Load( nodeGraph, stream );           break;
+        case Node::EXE_NODE:				n = ExeNode::Load( nodeGraph, stream );             break;
+        case Node::CS_NODE:					n = CSNode::Load( nodeGraph, stream );              break;
+        case Node::UNITY_NODE:				n = UnityNode::Load( nodeGraph, stream );           break;
+        case Node::TEST_NODE:				n = TestNode::Load( nodeGraph, stream );            break;
+        case Node::COMPILER_NODE:			n = CompilerNode::Load( nodeGraph, stream );        break;
+        case Node::DLL_NODE:				n = DLLNode::Load( nodeGraph, stream );             break;
+        case Node::VCXPROJECT_NODE:			n = VCXProjectNode::Load( nodeGraph, stream );      break;
+        case Node::OBJECT_LIST_NODE:		n = ObjectListNode::Load( nodeGraph, stream );      break;
+        case Node::COPY_DIR_NODE:			n = CopyDirNode::Load( nodeGraph, stream );         break;
+        case Node::SLN_NODE:				n = SLNNode::Load( nodeGraph, stream );             break;
+        case Node::REMOVE_DIR_NODE:			n = RemoveDirNode::Load( nodeGraph, stream );       break;
+        case Node::XCODEPROJECT_NODE:		n = XCodeProjectNode::Load( nodeGraph, stream );    break;
+        case Node::SETTINGS_NODE:			n = SettingsNode::Load( nodeGraph, stream );        break;
+		case Node::VSCODEPROJECT_NODE:		n = VSCodeProjectNode::Load( nodeGraph, stream );	break;
+		case Node::VSCODEWORKSPACE_NODE:	n = VSCodeWorkspaceNode::Load( nodeGraph, stream );	break;
+		case Node::NUM_NODE_TYPES:			ASSERT( false );                        break;
     }
 
     ASSERT( n );

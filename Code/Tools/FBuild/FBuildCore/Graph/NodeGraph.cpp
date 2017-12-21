@@ -34,6 +34,7 @@
 #include "VCXProjectNode.h"
 #include "XCodeProjectNode.h"
 #include "VSCodeProjectNode.h"
+#include "VSCodeWorkspaceNode.h"
 
 // Core
 #include "Core/Containers/AutoPtr.h"
@@ -957,16 +958,34 @@ SettingsNode * NodeGraph::CreateSettingsNode( const AString & name )
 
 // CreateVSCodeProjectNode
 //------------------------------------------------------------------------------
-
 VSCodeProjectNode * NodeGraph::CreateVSCodeProjectNode( const AString & projectOutput,
+														const AString & projectPath,
+														const AString & projectName,
 														const Array< VSCodeProjectConfig > & configs )
 {
 	ASSERT( Thread::IsMainThread() );
 
-	AStackString< 1024 > fullPath;
-	CleanPath( projectOutput, fullPath );
+	AStackString< 1024 > fullOutputPath;
+	AStackString< 1024 > fullProjectPath;
+	CleanPath( projectOutput, fullOutputPath );
+	CleanPath( projectPath, fullProjectPath );
 
-	VSCodeProjectNode * node = FNEW( VSCodeProjectNode( fullPath, configs ) );
+	VSCodeProjectNode * node = FNEW( VSCodeProjectNode( fullOutputPath, fullProjectPath, projectName, configs ) );
+	AddNode( node );
+	return node;
+}
+
+// CreateVSCodeWorkspaceNode
+//------------------------------------------------------------------------------
+VSCodeWorkspaceNode * NodeGraph::CreateVSCodeWorkspaceNode( const AString & workspaceOutput,
+															const Array< VSCodeProjectNode * > & projects )
+{
+	ASSERT( Thread::IsMainThread() );
+
+	AStackString< 1024 > fullPath;
+	CleanPath( workspaceOutput, fullPath );
+
+	VSCodeWorkspaceNode * node = FNEW( VSCodeWorkspaceNode( fullPath, projects ) );
 	AddNode( node );
 	return node;
 }

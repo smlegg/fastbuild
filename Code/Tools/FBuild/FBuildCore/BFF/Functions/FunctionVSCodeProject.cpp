@@ -35,7 +35,11 @@ FunctionVSCodeProject::FunctionVSCodeProject()
 /*virtual*/ bool FunctionVSCodeProject::Commit( NodeGraph & nodeGraph, const BFFIterator & funcStartIter ) const
 {
 	AStackString<> projectOutput;
-	if ( !GetString( funcStartIter, projectOutput, ".ProjectOutput", true ) )
+	AStackString<> projectPath;
+	AStackString<> projectName;
+	if ( !GetString( funcStartIter, projectOutput, ".ProjectOutput", true ) ||
+		 !GetString( funcStartIter, projectPath, ".ProjectPath", true ) ||
+		 !GetString( funcStartIter, projectName, ".ProjectName", false ) )
 	{
 		return false;
 	}
@@ -114,7 +118,7 @@ FunctionVSCodeProject::FunctionVSCodeProject()
 			}
 
 			GetStringFromStruct( s, ".IntellisenseMode", newConfig.m_IntellisenseMode );
-		
+
 			const BFFVariable ** limitSymbolsToIncludedHeadersFound = BFFVariable::GetMemberByName( limitSymbolsToIncludedHeadersName, s->GetStructMembers() );
 			const BFFVariable * limitSymbolsToIncludedHeaders = limitSymbolsToIncludedHeadersFound ? *limitSymbolsToIncludedHeadersFound : nullptr;
 			if ( limitSymbolsToIncludedHeaders )
@@ -141,7 +145,7 @@ FunctionVSCodeProject::FunctionVSCodeProject()
 		return false;
 	}
 
-	VSCodeProjectNode * pn = nodeGraph.CreateVSCodeProjectNode( projectOutput, configs );
+	VSCodeProjectNode * pn = nodeGraph.CreateVSCodeProjectNode( projectOutput, projectPath, projectName, configs );
 	ASSERT( pn );
 
 	return ProcessAlias( nodeGraph, funcStartIter, pn );

@@ -40,6 +40,7 @@ class UnityNode;
 class VCXProjectNode;
 class XCodeProjectNode;
 class VSCodeProjectNode;
+class VSCodeWorkspaceNode;
 
 // NodeGraphHeader
 //------------------------------------------------------------------------------
@@ -150,7 +151,11 @@ public:
     XCodeProjectNode * CreateXCodeProjectNode( const AString & name );
     SettingsNode * CreateSettingsNode( const AString & name );
 	VSCodeProjectNode * CreateVSCodeProjectNode( const AString & projectOutput,
+												 const AString & projectPath,
+												 const AString & projectName,
 												 const Array< VSCodeProjectConfig > & configs );
+	VSCodeWorkspaceNode * CreateVSCodeWorkspaceNode( const AString & workspaceOutput,
+													 const Array< VSCodeProjectNode * > & projects );
 
     void DoBuildPass( Node * nodeToBuild );
 

@@ -13,9 +13,13 @@
 // CONSTRUCTOR
 //------------------------------------------------------------------------------
 VSCodeProjectNode::VSCodeProjectNode( const AString & projectOutput,
+									  const AString & projectPath,
+									  const AString & projectName,
 									  const Array< VSCodeProjectConfig > & configs )
 : FileNode( projectOutput, Node::FLAG_NONE )
 , m_Configs( configs )
+, m_ProjectPath( projectPath )
+, m_ProjectName( projectName )
 {
 	m_LastBuildTimeMs = 100; // higher default than a file node
 	m_Type = Node::VSCODEPROJECT_NODE;
@@ -47,11 +51,13 @@ VSCodeProjectNode::~VSCodeProjectNode() = default;
 /*static*/ Node * VSCodeProjectNode::Load( NodeGraph & nodeGraph, IOStream & stream )
 {
 	NODE_LOAD( AStackString<>, name );
+	NODE_LOAD( AStackString<>, projectPath );
+	NODE_LOAD( AStackString<>, projectName );
 
 	Array< VSCodeProjectConfig > configs;
 	VSCodeProjectConfig::Load( nodeGraph, stream, configs );
 
-	VSCodeProjectNode * n = nodeGraph.CreateVSCodeProjectNode( name, configs );
+	VSCodeProjectNode * n = nodeGraph.CreateVSCodeProjectNode( name, projectPath, projectName, configs );
 	return n;
 }
 
@@ -60,6 +66,8 @@ VSCodeProjectNode::~VSCodeProjectNode() = default;
 /*virtual*/ void VSCodeProjectNode::Save( IOStream & stream ) const
 {
 	NODE_SAVE( m_Name );
+	NODE_SAVE( m_ProjectPath );
+	NODE_SAVE( m_ProjectName );
 	VSCodeProjectConfig::Save( stream, m_Configs );
 }
 	
