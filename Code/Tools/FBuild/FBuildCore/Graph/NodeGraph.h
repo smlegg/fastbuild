@@ -57,7 +57,7 @@ public:
     }
     inline ~NodeGraphHeader() = default;
 
-    enum { NODE_GRAPH_CURRENT_VERSION = 100 };
+    enum { NODE_GRAPH_CURRENT_VERSION = 105 };
 
     bool IsValid() const
     {
@@ -102,17 +102,8 @@ public:
     // create new nodes
     CopyFileNode * CreateCopyFileNode( const AString & dstFileName );
     CopyDirNode * CreateCopyDirNode( const AString & nodeName );
-    RemoveDirNode * CreateRemoveDirNode(const AString & nodeName,
-                                        Dependencies & staticDeps,
-                                        const Dependencies & preBuildDependencies );
-    ExecNode * CreateExecNode( const AString & dstFileName,
-                               const Dependencies & inputFiles,
-                               FileNode * executable,
-                               const AString & arguments,
-                               const AString & workingDir,
-                               int32_t expectedReturnCode,
-                               const Dependencies & preBuildDependencies,
-                               bool useStdOutAsOutput );
+    RemoveDirNode * CreateRemoveDirNode( const AString & nodeName );
+    ExecNode * CreateExecNode( const AString & dstFileName );
     FileNode * CreateFileNode( const AString & fileName, bool cleanPath = true );
     DirectoryListNode * CreateDirectoryListNode( const AString & name );
     LibraryNode *   CreateLibraryNode( const AString & libraryName );
@@ -161,8 +152,8 @@ public:
 
     void DoBuildPass( Node * nodeToBuild );
 
-    static void CleanPath( AString & name );
-    static void CleanPath( const AString & name, AString & fullPath );
+    static void CleanPath( AString & name, bool makeFullPath = true );
+    static void CleanPath( const AString & name, AString & cleanPath, bool makeFullPath = true );
     #if defined( ASSERTS_ENABLED )
         static bool IsCleanPath( const AString & path );
     #endif

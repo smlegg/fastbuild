@@ -78,7 +78,12 @@ Compiler( 'Compiler-x86Clang' )
 }
 Compiler( 'Compiler-x64-Linux' )
 {
-    .Executable = '/usr/bin/gcc'
+    .Executable     = '/usr/bin/gcc'
+    .ExtraFiles     = {
+                        '/usr/bin/as'
+                        '/usr/lib/gcc/x86_64-linux-gnu/4.9/cc1'
+                        '/usr/lib/gcc/x86_64-linux-gnu/4.9/cc1plus'
+                      }
 }
 Compiler( 'Compiler-x64-OSX' )
 {
@@ -549,8 +554,8 @@ Compiler( 'ResourceCompiler' )
 //------------------------------------------------------------------------------
 .ProjectCommon =
 [
-    .ProjectBuildCommand        = 'cd ^$(SolutionDir)\..\..\Code\ &amp; fbuild -vs -dist -fastcancel -cache ^$(ProjectName)-^$(Configuration)'
-    .ProjectRebuildCommand      = 'cd ^$(SolutionDir)\..\..\Code\ &amp; fbuild -vs -dist -fastcancel -cache -clean ^$(ProjectName)-^$(Configuration)'
+    .ProjectBuildCommand        = 'cd ^$(SolutionDir)\..\..\Code\ &amp; fbuild -vs -dist -monitor -fastcancel -cache ^$(ProjectName)-^$(Configuration)'
+    .ProjectRebuildCommand      = 'cd ^$(SolutionDir)\..\..\Code\ &amp; fbuild -vs -dist -monitor -fastcancel -cache -clean ^$(ProjectName)-^$(Configuration)'
     .OutputDirectory            = '^$(SolutionDir)\..\tmp2'
     .IntermediateDirectory      = '^$(SolutionDir)\..\tmp2'
     .BuildLogFile               = '^$(SolutionDir)\..\tmp2\^$(ProjectName)-^$(Configuration).log'

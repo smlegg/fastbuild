@@ -665,34 +665,25 @@ CopyDirNode * NodeGraph::CreateCopyDirNode( const AString & nodeName )
 
 // CreateRemoveDirNode
 //------------------------------------------------------------------------------
-RemoveDirNode * NodeGraph::CreateRemoveDirNode( const AString & nodeName,
-                                                Dependencies & staticDeps,
-                                                const Dependencies & preBuildDependencies )
+RemoveDirNode * NodeGraph::CreateRemoveDirNode( const AString & nodeName )
 {
     ASSERT( Thread::IsMainThread() );
 
-    RemoveDirNode * node = FNEW( RemoveDirNode( nodeName, staticDeps, preBuildDependencies ) );
+    RemoveDirNode * node = FNEW( RemoveDirNode() );
+    node->SetName( nodeName );
     AddNode( node );
     return node;
 }
 
 // CreateExecNode
 //------------------------------------------------------------------------------
-ExecNode * NodeGraph::CreateExecNode( const AString & dstFileName,
-                                      const Dependencies & inputFiles,
-                                      FileNode * executable,
-                                      const AString & arguments,
-                                      const AString & workingDir,
-                                      int32_t expectedReturnCode,
-                                      const Dependencies & preBuildDependencies,
-                                      bool useStdOutAsOutput )
+ExecNode * NodeGraph::CreateExecNode( const AString & nodeName )
 {
     ASSERT( Thread::IsMainThread() );
+    ASSERT( IsCleanPath( nodeName ) );
 
-    AStackString< 512 > fullPath;
-    CleanPath( dstFileName, fullPath );
-
-    ExecNode * node = FNEW( ExecNode( fullPath, inputFiles, executable, arguments, workingDir, expectedReturnCode, preBuildDependencies, useStdOutAsOutput ) );
+    ExecNode * node = FNEW( ExecNode() );
+    node->SetName( nodeName );
     AddNode( node );
     return node;
 }
@@ -1252,23 +1243,23 @@ bool NodeGraph::CheckDependencies( Node * nodeToBuild, const Dependencies & depe
 
 // CleanPath
 //------------------------------------------------------------------------------
-/*static*/ void NodeGraph::CleanPath( AString & name )
+/*static*/ void NodeGraph::CleanPath( AString & name, bool makeFullPath )
 {
     AStackString<> nameCopy( name );
-    CleanPath( nameCopy, name );
+    CleanPath( nameCopy, name, makeFullPath );
 }
 
 // CleanPath
 //------------------------------------------------------------------------------
-/*static*/ void NodeGraph::CleanPath( const AString & name, AString & fullPath )
+/*static*/ void NodeGraph::CleanPath( const AString & name, AString & cleanPath, bool makeFullPath )
 {
-    ASSERT( &name != &fullPath );
+    ASSERT( &name != &cleanPath );
 
     char * dst;
 
-    //  - path should be fully qualified
+    //  - path can be fully qualified
     bool isFullPath = PathUtils::IsFullPath( name );
-    if ( !isFullPath )
+    if ( !isFullPath && makeFullPath )
     {
         // make a full path by prepending working dir
         const AString & workingDir = FBuild::Get().GetWorkingDir();
@@ -1278,25 +1269,27 @@ bool NodeGraph::CheckDependencies( Node * nodeToBuild, const Dependencies & depe
         ASSERT( workingDir.Find( NATIVE_DOUBLE_SLASH ) == nullptr ); // redundant slashes removed
 
         // build the start of the path
-        fullPath = workingDir;
-        fullPath += NATIVE_SLASH;
+        cleanPath = workingDir;
+        cleanPath += NATIVE_SLASH;
 
         // concatenate
-        uint32_t len = fullPath.GetLength();
+        uint32_t len = cleanPath.GetLength();
 
         // make sure the dest will be big enough for the extra stuff
-        fullPath.SetLength( fullPath.GetLength() + name.GetLength() );
+        cleanPath.SetLength( cleanPath.GetLength() + name.GetLength() );
 
         // set the output (which maybe a newly allocated ptr)
-        dst = fullPath.Get() + len;
+        dst = cleanPath.Get() + len;
+
+        isFullPath = true;
     }
     else
     {
         // make sure the dest will be big enough
-        fullPath.SetLength( name.GetLength() );
+        cleanPath.SetLength( name.GetLength() );
 
         // copy from the start
-        dst = fullPath.Get();
+        dst = cleanPath.Get();
     }
 
     // the untrusted part of the path we need to copy/fix
@@ -1308,6 +1301,17 @@ bool NodeGraph::CheckDependencies( Node * nodeToBuild, const Dependencies & depe
     #if defined( __WINDOWS__ )
         while ( *src == NATIVE_SLASH || *src == OTHER_SLASH ) { ++src; } // strip leading slashes
     #endif
+
+    const char * lowestRemovableChar = cleanPath.Get();
+    if ( isFullPath )
+    {
+        #if defined( __WINDOWS__ )
+            lowestRemovableChar += 3; // e.g. "c:\"
+        #else
+            lowestRemovableChar += 1; // e.g. "/"
+        #endif
+    }
+
     while ( src < srcEnd )
     {
         const char thisChar = *src;
@@ -1355,16 +1359,11 @@ bool NodeGraph::CheckDependencies( Node * nodeToBuild, const Dependencies & depe
                             ++src;
                         }
 
-                        if ( dst > fullPath.Get() + 3 )
+                        if ( dst > lowestRemovableChar )
                         {
                             --dst; // remove slash
 
-                            // remove one level of path (but never past the absolute root)
-                            #if defined( __WINDOWS__ )
-                                while ( dst > fullPath.Get() + 3 ) // e.g. "c:\"
-                            #else
-                                while ( dst > fullPath.Get() + 1 ) // e.g. "/"
-                            #endif
+                            while ( dst > lowestRemovableChar ) // e.g. "c:\"
                             {
                                 --dst;
                                 if ( *dst == NATIVE_SLASH ) // only need to check for cleaned slashes
@@ -1373,6 +1372,13 @@ bool NodeGraph::CheckDependencies( Node * nodeToBuild, const Dependencies & depe
                                     break;
                                 }
                             }
+                        }
+                        else if( !isFullPath )
+                        {
+                            *dst++ = '.';
+                            *dst++ = '.';
+                            *dst++ = NATIVE_SLASH;
+                            lowestRemovableChar = dst;
                         }
 
                         continue;
@@ -1387,12 +1393,12 @@ bool NodeGraph::CheckDependencies( Node * nodeToBuild, const Dependencies & depe
     }
 
     // correct length of destination
-    fullPath.SetLength( (uint16_t)( dst - fullPath.Get() ) );
-    ASSERT( AString::StrLen( fullPath.Get() ) == fullPath.GetLength() );
+    cleanPath.SetLength( (uint16_t)( dst - cleanPath.Get() ) );
+    ASSERT( AString::StrLen( cleanPath.Get() ) == cleanPath.GetLength() );
 
     // sanity checks
-    ASSERT( fullPath.Find( OTHER_SLASH ) == nullptr ); // bad slashes removed
-    ASSERT( fullPath.Find( NATIVE_DOUBLE_SLASH ) == nullptr ); // redundant slashes removed
+    ASSERT( cleanPath.Find( OTHER_SLASH ) == nullptr ); // bad slashes removed
+    ASSERT( cleanPath.Find( NATIVE_DOUBLE_SLASH ) == nullptr ); // redundant slashes removed
 }
 
 // AddUsedFile

@@ -40,6 +40,7 @@ REFLECT_NODE_BEGIN( LinkerNode, Node, MetaName( "LinkerOutput" ) + MetaFile() )
     REFLECT( m_LinkerLinkObjects,               "LinkerLinkObjects",            MetaOptional() )
     REFLECT( m_LinkerStampExe,                  "LinkerStampExe",               MetaOptional() + MetaFile() )
     REFLECT( m_LinkerStampExeArgs,              "LinkerStampExeArgs",           MetaOptional() )
+    REFLECT_ARRAY( m_PreBuildDependencyNames,   "PreBuildDependencies",         MetaOptional() + MetaFile() + MetaAllowNonFile() )
 
     // Internal State
     REFLECT( m_Flags,                           "Flags",                        MetaHidden() )
@@ -61,6 +62,12 @@ LinkerNode::LinkerNode()
 //------------------------------------------------------------------------------
 bool LinkerNode::Initialize( NodeGraph & nodeGraph, const BFFIterator & iter, const Function * function )
 {
+    // .PreBuildDependencies
+    if ( !InitializePreBuildDependencies( nodeGraph, iter, function, m_PreBuildDependencyNames ) )
+    {
+        return false; // InitializePreBuildDependencies will have emitted an error
+    }
+
     // Get linker exe
     Node * linkerExeNode = nullptr;
     if ( !function->GetFileNode( nodeGraph, iter, linkerExeNode, ".Linker" ) ) // TODO:B Use m_Linker property
@@ -423,9 +430,9 @@ bool LinkerNode::BuildArgs( Args & fullArgs ) const
             continue;
         }
 
-        // %3 -> AssemblyResources
         if ( GetFlag( LINK_FLAG_MSVC ) )
         {
+            // %3 -> AssemblyResources
             found = token.Find( "%3" );
             if ( found )
             {
@@ -433,6 +440,27 @@ bool LinkerNode::BuildArgs( Args & fullArgs ) const
                 AStackString<> post( found + 2, token.GetEnd() );
                 GetAssemblyResourceFiles( fullArgs, pre, post );
                 fullArgs.AddDelimiter();
+                continue;
+            }
+
+            if ( IsStartOfLinkerArg_MSVC( token, "LIBPATH:" ) == true )
+            {
+                // get remainder of token after arg
+                const char * valueStart = token.Get() + 8 + 1;
+                const char * valueEnd = token.GetEnd();
+
+                AStackString<> value;
+                Args::StripQuotes( valueStart, valueEnd, value );
+
+                AStackString<> cleanValue;
+                NodeGraph::CleanPath( value, cleanValue, false );
+
+                fullArgs += token[0]; // reuse whichever prefix, / or -
+                fullArgs += "LIBPATH:\"";
+                fullArgs += cleanValue;
+                fullArgs += '\"';
+                fullArgs.AddDelimiter();
+
                 continue;
             }
         }
