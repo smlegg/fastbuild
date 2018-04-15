@@ -250,9 +250,9 @@ void TestGraph::TestDirectoryListNode() const
     // Generate a valid DirectoryListNode name
     AStackString<> name;
     #if defined( __WINDOWS__ )
-        const AStackString<> testFolder( "Data\\TestGraph\\" );
+        const AStackString<> testFolder( "Tools\\FBuild\\FBuildTest\\Data\\TestGraph\\" );
     #else
-        const AStackString<> testFolder( "Data/TestGraph/" );
+        const AStackString<> testFolder( "Tools/FBuild/FBuildTest/Data/TestGraph/" );
     #endif
     Array< AString > patterns;
     patterns.Append( AStackString<>( "library.*" ) );
@@ -277,8 +277,8 @@ void TestGraph::TestDirectoryListNode() const
     // make sure we got the expected results
     TEST_ASSERT( node->GetFiles().GetSize() == 2 );
     #if defined( __WINDOWS__ )
-        const char * fileName1 = "Data\\TestGraph\\library.cpp";
-        const char * fileName2 = "Data\\TestGraph\\library.o";
+        const char * fileName1 = "Tools\\FBuild\\FBuildTest\\Data\\TestGraph\\library.cpp";
+        const char * fileName2 = "Tools\\FBuild\\FBuildTest\\Data\\TestGraph\\library.o";
     #else
         const char * fileName1 = "Data/TestGraph/library.cpp";
         const char * fileName2 = "Data/TestGraph/library.o";
@@ -300,9 +300,6 @@ void TestGraph::TestDirectoryListNode() const
 //------------------------------------------------------------------------------
 void TestGraph::TestSerialization() const
 {
-    AStackString<> codeDir;
-    GetCodeDir( codeDir );
-
     const char * dbFile1    = "../tmp/Test/Graph/fbuild.db.1";
     const char * dbFile2    = "../tmp/Test/Graph/fbuild.db.2";
 
@@ -310,7 +307,6 @@ void TestGraph::TestSerialization() const
     {
         FBuildOptions options;
         options.m_ConfigFile = "fbuild.bff";
-        options.SetWorkingDir( codeDir );
         FBuild fBuild( options );
         TEST_ASSERT( fBuild.Initialize() );
         TEST_ASSERT( fBuild.SaveDependencyGraph( dbFile1 ) );
@@ -321,7 +317,6 @@ void TestGraph::TestSerialization() const
     {
         FBuildOptions options;
         options.m_ConfigFile = "fbuild.bff";
-        options.SetWorkingDir( codeDir );
         FBuild fBuild( options );
         TEST_ASSERT( fBuild.Initialize( dbFile1 ) );
         TEST_ASSERT( fBuild.SaveDependencyGraph( dbFile2 ) );
@@ -540,12 +535,12 @@ void TestGraph::TestCleanPathPartial() const
 //------------------------------------------------------------------------------
 void TestGraph::TestDeepGraph() const
 {
-    FBuildOptions options;
-    options.m_ConfigFile = "Data/TestGraph/DeepGraph.bff";
+    FBuildTestOptions options;
+    options.m_ConfigFile = "Tools/FBuild/FBuildTest/Data/TestGraph/DeepGraph.bff";
     options.m_UseCacheRead = true;
     options.m_UseCacheWrite = true;
 
-    const char * dbFile1 = "../../../../tmp/Test/Graph/DeepGraph.fdb";
+    const char * dbFile1 = "../tmp/Test/Graph/DeepGraph.fdb";
 
     {
         // do a clean build
@@ -562,7 +557,6 @@ void TestGraph::TestDeepGraph() const
         Timer t;
 
         // no op build
-        options.m_ShowSummary = true; // required to generate stats for node count checks
         FBuild fBuild( options );
         TEST_ASSERT( fBuild.Initialize( dbFile1 ) );
         TEST_ASSERT( fBuild.Build( AStackString<>( "all" ) ) );
@@ -578,10 +572,9 @@ void TestGraph::TestDeepGraph() const
 //------------------------------------------------------------------------------
 void TestGraph::TestNoStopOnFirstError() const
 {
-    FBuildOptions options;
-    options.m_ShowSummary = true;   // required to generate stats for node count checks
+    FBuildTestOptions options;
     options.m_NumWorkerThreads = 0; // ensure test behaves deterministically
-    options.m_ConfigFile = "Data/TestGraph/NoStopOnFirstError/fbuild.bff";
+    options.m_ConfigFile = "Tools/FBuild/FBuildTest/Data/TestGraph/NoStopOnFirstError/fbuild.bff";
     options.m_FastCancel = true;
 
     // "Stop On First Error" build (default behaviour)
@@ -624,11 +617,11 @@ void TestGraph::TestNoStopOnFirstError() const
 //------------------------------------------------------------------------------
 void TestGraph::DBLocationChanged() const
 {
-    FBuildOptions options;
-    options.m_ConfigFile = "Data/TestGraph/DatabaseMoved/fbuild.bff";
+    FBuildTestOptions options;
+    options.m_ConfigFile = "Tools/FBuild/FBuildTest/Data/TestGraph/DatabaseMoved/fbuild.bff";
 
-    const char* dbFile1 = "../../../../tmp/Test/Graph/DatabaseMoved/1/GraphMoved.fdb";
-    const char* dbFile2 = "../../../../tmp/Test/Graph/DatabaseMoved/2/GraphMoved.fdb";
+    const char* dbFile1 = "../tmp/Test/Graph/DatabaseMoved/1/GraphMoved.fdb";
+    const char* dbFile2 = "../tmp/Test/Graph/DatabaseMoved/2/GraphMoved.fdb";
 
     EnsureFileDoesNotExist( dbFile1 );
     EnsureFileDoesNotExist( dbFile2 );
@@ -638,10 +631,8 @@ void TestGraph::DBLocationChanged() const
         FBuild fBuild( options );
         TEST_ASSERT( fBuild.Initialize() );
         TEST_ASSERT( fBuild.SaveDependencyGraph( dbFile1 ) );
-    }
 
-    // Copy the DB
-    {
+        // Copy the DB
         AStackString<> dbPath2( dbFile2 );
         dbPath2.SetLength( (uint32_t)( dbPath2.FindLast( FORWARD_SLASH ) - dbPath2.Get() ) );
         TEST_ASSERT( FileIO::EnsurePathExists( dbPath2 ) );
@@ -661,9 +652,9 @@ void TestGraph::DBLocationChanged() const
 //------------------------------------------------------------------------------
 void TestGraph::BFFDirtied() const
 {
-    const char* originalBFF             = "Data/TestGraph/BFFDirtied/fbuild.bff";
-    const char* copyOfBFF           = "../../../../tmp/Test/Graph/BFFDirtied/fbuild.bff";
-    const char* dbFile              = "../../../../tmp/Test/Graph/BFFDirtied/fbuild.fdb";
+    const char* originalBFF             = "Tools/FBuild/FBuildTest/Data/TestGraph/BFFDirtied/fbuild.bff";
+    const char* copyOfBFF           = "../tmp/Test/Graph/BFFDirtied/fbuild.bff";
+    const char* dbFile              = "../tmp/Test/Graph/BFFDirtied/fbuild.fdb";
 
     EnsureFileDoesNotExist( copyOfBFF );
     EnsureFileDoesNotExist( dbFile );
@@ -739,8 +730,12 @@ void TestGraph::DBVersionChanged() const
 
     ( (char *)ms.GetDataMutable() )[3] = ( NodeGraphHeader::NODE_GRAPH_CURRENT_VERSION - 1 );
 
-    const char* oldDB       = "../../../../tmp/Test/Graph/DBVersionChanged/fbuild.fdb";
-    const char* emptyBFF    = "../../../../tmp/Test/Graph/DBVersionChanged/fbuild.bff";
+    const char* oldDB       = "../tmp/Test/Graph/DBVersionChanged/fbuild.fdb";
+    const char* emptyBFF    = "../tmp/Test/Graph/DBVersionChanged/fbuild.bff";
+
+    FBuildTestOptions options;
+    options.m_ConfigFile = emptyBFF;
+    FBuild fBuild( options );
 
     // cleanup & prep
     {
@@ -759,9 +754,6 @@ void TestGraph::DBVersionChanged() const
     }
 
     // Init from old DB
-    FBuildOptions options;
-    options.m_ConfigFile = emptyBFF;
-    FBuild fBuild( options );
     TEST_ASSERT( fBuild.Initialize( oldDB ) );
 
     // Ensure user was informed about change

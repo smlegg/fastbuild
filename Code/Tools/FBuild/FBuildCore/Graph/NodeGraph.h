@@ -57,7 +57,7 @@ public:
     }
     inline ~NodeGraphHeader() = default;
 
-    enum { NODE_GRAPH_CURRENT_VERSION = 105 };
+    enum { NODE_GRAPH_CURRENT_VERSION = 109 };
 
     bool IsValid() const
     {
@@ -131,14 +131,7 @@ public:
                                            const Array< VSProjectFileType > & fileTypes,
                                            const Array< AString > & references,
                                            const Array< AString > & projectReferences );
-    SLNNode * CreateSLNNode(    const AString & solutionOutput,
-                                const AString & solutionBuildProject,
-                                const AString & solutionVisualStudioVersion,
-                                const AString & solutionMinimumVisualStudioVersion,
-                                const Array< VSProjectConfig > & configs,
-                                const Array< VCXProjectNode * > & projects,
-                                const Array< SLNDependency > & slnDeps,
-                                const Array< SLNSolutionFolder > & folders );
+    SLNNode * CreateSLNNode( const AString & name );
     ObjectListNode * CreateObjectListNode( const AString & listName );
     XCodeProjectNode * CreateXCodeProjectNode( const AString & name );
     SettingsNode * CreateSettingsNode( const AString & name );
