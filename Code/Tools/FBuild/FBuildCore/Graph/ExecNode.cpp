@@ -109,6 +109,19 @@ ExecNode::~ExecNode() = default;
 //------------------------------------------------------------------------------
 /*virtual*/ Node::BuildResult ExecNode::DoBuild( Job * job )
 {
+    // Delete previous file(s) if doing a clean build
+    if ( FBuild::Get().GetOptions().m_ForceCleanBuild )
+    {
+        if ( FileIO::FileExists( m_Name.Get() ) )
+        {
+            if ( FileIO::FileDelete( m_Name.Get() ) == false )
+            {
+                FLOG_ERROR( "Failed to delete file before build '%s'", GetName().Get() );
+                return NODE_RESULT_FAILED;
+            }
+        }
+    }
+
     // If the workingDir is empty, use the current dir for the process
     const char * workingDir = m_ExecWorkingDir.IsEmpty() ? nullptr : m_ExecWorkingDir.Get();
 
