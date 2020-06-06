@@ -47,8 +47,6 @@ typedef signed int          int32_t;
 #define KILOBYTE (1024)
 #define MEGABYTE (1024 * 1024)
 
-#define UNUSED( x )
-
 #if defined( __WINDOWS__ )
     #define THREAD_LOCAL __declspec( thread )
 #else
@@ -103,12 +101,6 @@ typedef signed int          int32_t;
     #define __w64
 #endif
 
-#if !defined( __WINDOWS__ ) || defined( __clang__ )
-    #ifndef nullptr
-        #define nullptr (0)
-    #endif
-#endif
-
 // Versions of Visual Studio prior to 2017 don't manage noexcept properly
 #if defined( _MSC_VER ) && ( _MSC_VER < 1910 ) && !defined( __clang__ )
     #define NOEXCEPT
@@ -124,7 +116,7 @@ typedef signed int          int32_t;
     #define MemoryBarrier() __asm__ __volatile__("")
 #endif
 
-#if defined( __GNUC__ ) // GCC or Clang
+#if defined( __GNUC__ ) || defined( __clang__ ) // GCC or Clang
     #define FORMAT_STRING( fmt, args ) __attribute__((format(printf, fmt, args)))
 #else
     #define FORMAT_STRING( fmt, args )
@@ -149,4 +141,12 @@ typedef signed int          int32_t;
     #define PRAGMA_DISABLE_PUSH_CLANG( w )
     #define PRAGMA_DISABLE_POP_CLANG
 #endif
+#if defined( __WINDOWS__ ) && defined( __clang__ )
+    #define PRAGMA_DISABLE_PUSH_CLANG_WINDOWS( w ) PRAGMA_DISABLE_PUSH_CLANG( w )
+    #define PRAGMA_DISABLE_POP_CLANG_WINDOWS PRAGMA_DISABLE_POP_CLANG
+#else
+    #define PRAGMA_DISABLE_PUSH_CLANG_WINDOWS( w )
+    #define PRAGMA_DISABLE_POP_CLANG_WINDOWS
+#endif
+
 //------------------------------------------------------------------------------

@@ -3,75 +3,16 @@
 
 // Includes
 //------------------------------------------------------------------------------
-#include "Tools/FBuild/FBuildCore/PrecompiledHeader.h"
 
-#include "VSCodeProjectGenerator.h"
+// Core
+#include "Core/FileIO/FileIO.h"
+#include "Core/FileIO/PathUtils.h"
 
 // FBuildCore
 #include "Tools/FBuild/FBuildCore/Graph/NodeGraph.h"
 #include "Tools/FBuild/FBuildCore/Graph/ObjectListNode.h"
+#include "Tools/FBuild/FBuildCore/Graph/VSCodeProjectNode.h"
 #include "Tools/FBuild/FBuildCore/Helpers/ProjectGeneratorBase.h" // TODO:C Remove when VSProjectGenerator derives from ProjectGeneratorBase
-
-// CONSTRUCTOR (VSCodeProjectConfig)
-//------------------------------------------------------------------------------
-VSCodeProjectConfig::VSCodeProjectConfig()
-	: m_LimitSymbolsToIncludedHeaders(true)
-	, m_Target(nullptr)
-{
-}
-
-// DESTRUCTOR (VSCodeProjectConfig)
-//------------------------------------------------------------------------------
-VSCodeProjectConfig::~VSCodeProjectConfig() = default;
-
-// VSCodeProjectConfig::Save
-//------------------------------------------------------------------------------
-/*static*/ void VSCodeProjectConfig::Save( IOStream & stream, const Array< VSCodeProjectConfig > & configs )
-{
-	uint32_t numConfigs = (uint32_t)configs.GetSize();
-	stream.Write( numConfigs );
-	for ( uint32_t i = 0; i < numConfigs; ++i )
-	{
-		const VSCodeProjectConfig & cfg = configs[i];
-
-		stream.Write( cfg.m_Config );
-		stream.Write( cfg.m_Defines );
-		stream.Write( cfg.m_IncludePath );
-		stream.Write( cfg.m_IntellisenseMode );
-		stream.Write( cfg.m_LimitSymbolsToIncludedHeaders );
-		stream.Write( cfg.m_DatabaseFilename );
-
-		Node::SaveNodeLink( stream, cfg.m_Target );
-	}
-}
-
-// VSCodeProjectConfig::Load
-//------------------------------------------------------------------------------
-/*static*/ bool VSCodeProjectConfig::Load( NodeGraph & nodeGraph , IOStream & stream, Array< VSCodeProjectConfig > & configs )
-{
-	ASSERT( configs.IsEmpty() );
-
-	uint32_t numConfigs( 0 );
-	if ( !stream.Read( numConfigs ) )
-	{
-		return false;
-	}
-	configs.SetSize( numConfigs );
-	for ( uint32_t i = 0; i < numConfigs; ++i )
-	{
-		VSCodeProjectConfig & cfg = configs[i];
-
-		if ( stream.Read( cfg.m_Config ) == false ) { return false; }
-		if ( stream.Read( cfg.m_Defines ) == false ) { return false; }
-		if ( stream.Read( cfg.m_IncludePath ) == false ) { return false; }
-		if ( stream.Read( cfg.m_IntellisenseMode ) == false ) { return false;  }
-		if ( stream.Read( cfg.m_LimitSymbolsToIncludedHeaders ) == false ) { return false; }
-		if ( stream.Read( cfg.m_DatabaseFilename ) == false ) { return false; }
-
-		if ( !Node::LoadNodeLink( nodeGraph, stream, cfg.m_Target ) ) { return false; }
-	}
-	return true;
-}
 
 // CONSTRUCTOR
 //------------------------------------------------------------------------------
@@ -101,7 +42,7 @@ const AString & VSCodeProjectGenerator::Generate( const Array< VSCodeProjectConf
 		const ObjectListNode * oln = nullptr;
 		if ( cIt->m_IncludePath.IsEmpty() || cIt->m_Defines.IsEmpty() )
 		{
-			oln = ProjectGeneratorBase::FindTargetForIntellisenseInfo( cIt->m_Target );
+			oln = ProjectGeneratorBase::FindTargetForIntellisenseInfo( cIt->m_TargetNode );
 		}
 
 		if ( cIt != configs.Begin() )
@@ -122,8 +63,11 @@ const AString & VSCodeProjectGenerator::Generate( const Array< VSCodeProjectConf
 		{
 			if ( oln )
 			{
-				ProjectGeneratorBase::ExtractIntellisenseOptions( oln->GetCompilerOptions(), "-isystem", nullptr, extractedIncludePaths, false );
-				ProjectGeneratorBase::ExtractIntellisenseOptions( oln->GetCompilerOptions(), "/I", "-I", extractedIncludePaths, false );
+				StackArray< AString, 3 > prefixes;
+				prefixes.EmplaceBack( "-isystem" );
+				prefixes.EmplaceBack( "/I" );
+				prefixes.EmplaceBack( "-I" );
+				ProjectGeneratorBase::ExtractIntellisenseOptions( oln->GetCompilerOptions(), prefixes, extractedIncludePaths, false, false );
 			}
 			includePaths = &extractedIncludePaths;
 		}
@@ -143,12 +87,27 @@ const AString & VSCodeProjectGenerator::Generate( const Array< VSCodeProjectConf
 		{
 			if ( oln )
 			{
+				StackArray< AString, 2 > prefixes;
+				prefixes.EmplaceBack( "/D" );
+				prefixes.EmplaceBack( "-D" );
+
 				Array< AString > defines;
-				ProjectGeneratorBase::ExtractIntellisenseOptions( oln->GetCompilerOptions(), "/D", "-D", defines, false );
+				ProjectGeneratorBase::ExtractIntellisenseOptions( oln->GetCompilerOptions(), prefixes, defines, false, false );
 				WriteStringList( defines, "\t\t\t\t" );
 			}
 		}
 		Write( "\n\t\t\t],\n" );
+
+		if ( cIt->m_ForcedInclude.IsEmpty() == false )
+		{
+			Array< AString > resolved;
+			ResolveIncludeFiles( cIt->m_ForcedInclude, *includePaths, resolved );
+
+			Write( "\t\t\t\"forcedInclude\":\n" );
+			Write( "\t\t\t[\n" );
+			WritePathList( resolved, "\t\t\t\t\t" );
+			Write( "\n\t\t\t\t],\n" );
+		}
 
 		if ( cIt->m_IntellisenseMode.IsEmpty() == false )
 		{
@@ -196,7 +155,7 @@ void VSCodeProjectGenerator::WritePathList( const Array< AString > & paths, cons
 		}
 		first = false;
 
-		AStackString<> fullPath;
+		AString fullPath;
 		NodeGraph::CleanPath( path, fullPath );
 		fullPath.Replace( '\\', '/' );
 
@@ -221,4 +180,44 @@ void VSCodeProjectGenerator::WriteStringList( const Array< AString > & strings, 
 		Write( "%s\"%s\"", prefix, string.Get() );
 	}
 	Write( "\n" );
+}
+
+
+// ResolveIncludeFile
+//------------------------------------------------------------------------------
+void VSCodeProjectGenerator::ResolveIncludeFile( const AString & fileName, const Array< AString > & paths, AString & resolved )
+{
+	AString cleanFileName( fileName );
+	NodeGraph::CleanPath( cleanFileName, false );
+
+	resolved = cleanFileName;
+	if (!PathUtils::IsFullPath( cleanFileName ))
+	{
+		for (const AString & path : paths)
+		{
+			AString fullPath(path);
+			NodeGraph::CleanPath( fullPath );
+			fullPath += NATIVE_SLASH;
+			fullPath += cleanFileName;
+
+			if (FileIO::FileExists( fullPath.Get() ))
+			{
+				resolved = fullPath;
+				break;
+			}
+		}
+	}
+}
+
+// ResolveIncludeFiles
+//------------------------------------------------------------------------------
+void VSCodeProjectGenerator::ResolveIncludeFiles( const Array < AString > &fileNames, const Array< AString > & paths, Array< AString > & resolved )
+{
+	resolved.SetCapacity( fileNames.GetSize() );
+	for ( const AString & fileName : fileNames )
+	{
+		AString resolvedFileName;
+		ResolveIncludeFile( fileName, paths, resolvedFileName );
+		resolved.Append( resolvedFileName );
+	}
 }

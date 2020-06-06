@@ -3,42 +3,38 @@
 
 // Includes
 //------------------------------------------------------------------------------
-#include "Core/PrecompiledHeader.h"
-
 #include "FileStream.h"
 
 // Core
 #include "Core/Env/Assert.h"
-#include "Core/Strings/AString.h"
 #include "Core/Strings/AStackString.h"
+#include "Core/Strings/AString.h"
 
 // system
 #include <stdio.h>
 #if defined( __WINDOWS__ )
-    #include <windows.h>
+    #include "Core/Env/WindowsHeader.h"
+#else
+    #include <fcntl.h>
+    #include <sys/stat.h>
+    #include <unistd.h>
 #endif
 
 // Defines
 //------------------------------------------------------------------------------
-//#define FILESTREAM_DETAILED_DEBUG // uncomment this for lots of spam
-#ifdef FILESTREAM_DETAILED_DEBUG
-    #include "Core/Tracing/Tracing.h"
-    #include "Core/Process/Thread.h"
-    #define FSDEBUG( x ) x
-#else
-    #define FSDEBUG( x ) PRAGMA_DISABLE_PUSH_MSVC(4127) \
-                        do {} while ( false );          \
-                        PRAGMA_DISABLE_POP_MSVC
-#endif
-
 #if defined( __APPLE__ ) || defined( __LINUX__ )
-    #define INVALID_HANDLE_VALUE ( 0 )
+    #define INVALID_HANDLE_VALUE ( -1 )
 #endif
+#define FILESTREAM_READWRITE_SIZE ( 16 * MEGABYTE )
 
 // CONSTRUCTOR
 //------------------------------------------------------------------------------
 FileStream::FileStream()
-: m_Handle( (void *)INVALID_HANDLE_VALUE )
+    #if defined( __WINDOWS__ )
+        : m_Handle( (void *)INVALID_HANDLE_VALUE )
+    #else
+        : m_Handle( INVALID_HANDLE_VALUE )
+    #endif
 {
 }
 
@@ -58,110 +54,119 @@ bool FileStream::Open( const char * fileName, uint32_t fileMode )
 {
     ASSERT( !IsOpen() );
 
-#if defined( __WINDOWS__ )
-    DWORD desiredAccess( 0 );
-    DWORD shareMode( 0 );
-    DWORD creationDisposition( 0 );
-    DWORD flags( FILE_ATTRIBUTE_NORMAL );
+    #if defined( __WINDOWS__ )
+        DWORD desiredAccess( 0 );
+        DWORD shareMode( 0 );
+        DWORD creationDisposition( 0 );
+        DWORD flags( FILE_ATTRIBUTE_NORMAL );
 
-    // access mode
-    if ( ( fileMode & READ_ONLY ) != 0 )
-    {
-        ASSERT( fileMode == READ_ONLY ); // no extra flags allowed
-        desiredAccess       |= GENERIC_READ;
-        shareMode           |= FILE_SHARE_READ; // allow other readers
-        creationDisposition |= OPEN_EXISTING;
-    }
-    else if ( ( fileMode & WRITE_ONLY ) != 0 )
-    {
-        desiredAccess       |= GENERIC_WRITE;
-        shareMode           |= FILE_SHARE_READ; // allow other readers
-        creationDisposition |= CREATE_ALWAYS; // overwrite existing
-    }
-    else
-    {
-        ASSERT( false ); // must specify an access mode
-    }
-
-    // extra flags
-    if ( ( fileMode & TEMP ) != 0 )
-    {
-        flags |= FILE_ATTRIBUTE_TEMPORARY; // don't flush to disk if possible
-    }
-
-    // for sharing violations, we'll retry a few times as per http://support.microsoft.com/kb/316609
-    size_t retryCount = 0;
-    while ( retryCount < 5 )
-    {
-        HANDLE h = CreateFile( fileName,            // _In_     LPCTSTR lpFileName,
-                               desiredAccess,       // _In_     DWORD dwDesiredAccess,
-                               shareMode,           // _In_     DWORD dwShareMode,
-                               nullptr,             // _In_opt_ LPSECURITY_ATTRIBUTES lpSecurityAttributes,
-                               creationDisposition, // _In_     DWORD dwCreationDisposition,
-                               flags,               // _In_     DWORD dwFlagsAndAttributes,
-                               nullptr );           // _In_opt_ HANDLE hTemplateFile
-
-        if ( h != INVALID_HANDLE_VALUE )
+        // access mode
+        if ( ( fileMode & READ_ONLY ) != 0 )
         {
-            // file opened ok
-            m_Handle = (void *)h;
-            FSDEBUG( DEBUGSPAM( "Open file OK: %x - '%s' on %x\n", m_Handle, fileName, Thread::GetCurrentThreadId() ); )
-            return true;
+            ASSERT( fileMode == READ_ONLY ); // no extra flags allowed
+            desiredAccess       |= GENERIC_READ;
+            shareMode           |= FILE_SHARE_READ; // allow other readers
+            creationDisposition |= OPEN_EXISTING;
+        }
+        else if ( ( fileMode & WRITE_ONLY ) != 0 )
+        {
+            desiredAccess       |= GENERIC_WRITE;
+            shareMode           |= FILE_SHARE_READ; // allow other readers
+            creationDisposition |= CREATE_ALWAYS; // overwrite existing
+        }
+        else
+        {
+            ASSERT( false ); // must specify an access mode
         }
 
-        // problem opening file...
-
-        // was it a sharing violation?
-        if ( GetLastError() == ERROR_SHARING_VIOLATION )
+        // extra flags
+        if ( ( fileMode & TEMP ) != 0 )
         {
-            if ( ( fileMode & NO_RETRY_ON_SHARING_VIOLATION ) != 0 )
+            flags |= FILE_ATTRIBUTE_TEMPORARY; // don't flush to disk if possible
+        }
+
+        // for sharing violations, we'll retry a few times as per http://support.microsoft.com/kb/316609
+        size_t retryCount = 0;
+        while ( retryCount < 5 )
+        {
+            HANDLE h = CreateFile( fileName,            // _In_     LPCTSTR lpFileName,
+                                   desiredAccess,       // _In_     DWORD dwDesiredAccess,
+                                   shareMode,           // _In_     DWORD dwShareMode,
+                                   nullptr,             // _In_opt_ LPSECURITY_ATTRIBUTES lpSecurityAttributes,
+                                   creationDisposition, // _In_     DWORD dwCreationDisposition,
+                                   flags,               // _In_     DWORD dwFlagsAndAttributes,
+                                   nullptr );           // _In_opt_ HANDLE hTemplateFile
+
+            if ( h != INVALID_HANDLE_VALUE )
             {
-                break; // just fail
+                // file opened ok
+                m_Handle = (void *)h;
+                return true;
             }
 
-            ++retryCount;
-            FSDEBUG( DEBUGSPAM( "Open file sharing violation: '%s' on %x (try %u)\n", fileName, Thread::GetCurrentThreadId(), retryCount ); )
-            Sleep( 100 ); // sleep and
-            continue;     // try again as per http://support.microsoft.com/kb/316609
+            // problem opening file...
+
+            // was it a sharing violation?
+            if ( GetLastError() == ERROR_SHARING_VIOLATION )
+            {
+                if ( ( fileMode & NO_RETRY_ON_SHARING_VIOLATION ) != 0 )
+                {
+                    break; // just fail
+                }
+
+                ++retryCount;
+                Sleep( 100 ); // sleep and
+                continue;     // try again as per http://support.microsoft.com/kb/316609
+            }
+
+            // some other kind of error...
+            break;
+        }
+    #elif defined( __APPLE__ ) || defined( __LINUX__ )
+        // Flags
+        int32_t flags = O_CLOEXEC; // Ensure handles are not inherited by child processes
+        mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH; // TODO:LINUX TODO:MAC Check these permissions
+        if ( ( fileMode & READ_ONLY ) != 0 )
+        {
+            flags |= O_RDONLY;
+        }
+        else if ( ( fileMode & WRITE_ONLY ) != 0 )
+        {
+            flags |= ( O_WRONLY | O_CREAT | O_TRUNC );
+        }
+        else
+        {
+            ASSERT( false ); // must specify an access mode
         }
 
-        // some other kind of error...
-        break;
-    }
-#elif defined ( __APPLE__ ) || defined( __LINUX__ )
-    // Read/Write mode
-    AStackString<8> modeStr;
-    if ( ( fileMode & READ_ONLY ) != 0 )
-    {
-        modeStr += "rb";
-    }
-    else if ( ( fileMode & WRITE_ONLY ) != 0 )
-    {
-        modeStr += "wb";
-    }
-    else
-    {
-        ASSERT( false ); // must specify an access mode
-    }
+        // extra flags
+        if ( ( fileMode & TEMP ) != 0 )
+        {
+            // hint flag - unsupported (we don't want the behaviour of O_TMPFILE)
+        }
 
-    // extra flags
-    if ( ( fileMode & TEMP ) != 0 )
-    {
-        // hint flag - unsupported
-    }
+        m_Handle = open( fileName, flags, mode );
+        if ( m_Handle != INVALID_HANDLE_VALUE )
+        {
+            // Ensure this is not a directory
+            struct stat s;
+            if ( ( fstat( m_Handle, &s ) != 0 ) || S_ISDIR( s.st_mode ) )
+            {
+                // not a file (e.g. a directory)
+                close( m_Handle );
 
-    m_Handle = fopen( fileName, modeStr.Get() );
-    if ( m_Handle != INVALID_HANDLE_VALUE )
-    {
-        // file opened ok
-        FSDEBUG( DEBUGSPAM( "Open file OK: %x - '%s' on %x\n", m_Handle, fileName, Thread::GetCurrentThreadId() ); )
-        return true;
-    }
-#else
-    #error Unknown platform
-#endif
+                // fall through to setting INVALID_HANDLE_VALUE
+            }
+            else
+            {
+                // file opened ok
+                return true;
+            }
+        }
+    #else
+        #error Unknown platform
+    #endif
 
-    FSDEBUG( DEBUGSPAM( "Open file error: %d - '%s' on %x\n", GetLastError(), fileName, Thread::GetCurrentThreadId() ); )
     m_Handle = INVALID_HANDLE_VALUE;
     return false;
 }
@@ -174,11 +179,10 @@ void FileStream::Close()
 #if defined( __WINDOWS__ )
     VERIFY( CloseHandle( (HANDLE)m_Handle ) );
 #elif defined( __APPLE__ ) || defined( __LINUX__ )
-    fclose( (FILE*)m_Handle );
+    close( m_Handle );
 #else
     #error Unknown platform
 #endif
-    FSDEBUG( DEBUGSPAM( "Close file: %x on %x\n", m_Handle, Thread::GetCurrentThreadId() ); )
     m_Handle = INVALID_HANDLE_VALUE;
 }
 
@@ -201,7 +205,7 @@ bool FileStream::IsOpen() const
     do
     {
         uint64_t remaining = ( bytesToRead - totalBytesRead );
-        uint32_t tryToReadNow = ( remaining > MEGABYTE ) ? MEGABYTE : (uint32_t)remaining;
+        uint32_t tryToReadNow = ( remaining > FILESTREAM_READWRITE_SIZE ) ? FILESTREAM_READWRITE_SIZE : (uint32_t)remaining;
         uint32_t bytesReadNow = 0;
         if ( FALSE == ReadFile( (HANDLE)m_Handle,                           // _In_         HANDLE hFile,
                                 (char *)buffer + (size_t)totalBytesRead,    // _Out_        LPVOID lpBuffer,
@@ -218,12 +222,10 @@ bool FileStream::IsOpen() const
         totalBytesRead += bytesReadNow;
     } while ( totalBytesRead < bytesToRead );
 #elif defined( __APPLE__ ) || defined( __LINUX__ )
-    totalBytesRead += fread( buffer, 1, bytesToRead, (FILE*)m_Handle );
+    totalBytesRead += read( m_Handle, buffer, bytesToRead );
 #else
     #error Unknown platform
 #endif
-
-    FSDEBUG( DEBUGSPAM( "Read %" PRIu64 " bytes to %x on %x\n", totalBytesRead, m_Handle, Thread::GetCurrentThreadId() ); )
 
     return totalBytesRead;
 }
@@ -240,7 +242,7 @@ bool FileStream::IsOpen() const
     do
     {
         uint64_t remaining = ( bytesToWrite - totalBytesWritten );
-        uint32_t tryToWriteNow = ( remaining > MEGABYTE ) ? MEGABYTE : (uint32_t)remaining;
+        uint32_t tryToWriteNow = ( remaining > FILESTREAM_READWRITE_SIZE ) ? FILESTREAM_READWRITE_SIZE : (uint32_t)remaining;
         uint32_t bytesWrittenNow = 0;
         if ( FALSE == WriteFile( (HANDLE)m_Handle,                              // _In_         HANDLE hFile,
                                  (char *)buffer + (size_t)totalBytesWritten,    // _In_         LPCVOID lpBuffer,
@@ -253,12 +255,10 @@ bool FileStream::IsOpen() const
         totalBytesWritten += bytesWrittenNow;
     } while ( totalBytesWritten < bytesToWrite );
 #elif defined( __APPLE__ ) || defined( __LINUX__ )
-    totalBytesWritten = fwrite( buffer, 1, bytesToWrite, (FILE*)m_Handle );
+    totalBytesWritten = write( m_Handle, buffer, bytesToWrite );
 #else
     #error Unknown platform
 #endif
-
-    FSDEBUG( DEBUGSPAM( "Write %" PRIu64 " bytes to %x on %x\n", totalBytesWritten, m_Handle, Thread::GetCurrentThreadId() ); )
 
     return totalBytesWritten;
 }
@@ -267,13 +267,11 @@ bool FileStream::IsOpen() const
 //------------------------------------------------------------------------------
 /*virtual*/ void FileStream::Flush()
 {
-    FSDEBUG( DEBUGSPAM( "Flush %x on %x\n", m_Handle, Thread::GetCurrentThreadId() ); )
-
     ASSERT( IsOpen() );
 #if defined( __WINDOWS__ )
     VERIFY( FlushFileBuffers( (HANDLE)m_Handle ) );
 #elif defined( __APPLE__ ) || defined( __LINUX__ )
-    fflush( (FILE*)m_Handle );
+    // File is unbuffered
 #else
     #error Unknown platform
 #endif
@@ -283,17 +281,15 @@ bool FileStream::IsOpen() const
 //------------------------------------------------------------------------------
 /*virtual*/ uint64_t FileStream::Tell() const
 {
-    FSDEBUG( DEBUGSPAM( "Tell %x on %x\n", m_Handle, Thread::GetCurrentThreadId() ); )
-
     ASSERT( IsOpen() );
 
 #if defined( __WINDOWS__ )
     LARGE_INTEGER zeroPos, newPos;
     zeroPos.QuadPart = 0;
     VERIFY( SetFilePointerEx( (HANDLE)m_Handle, zeroPos, &newPos, FILE_CURRENT ) );
-    return newPos.QuadPart;
+    return (uint64_t)newPos.QuadPart;
 #elif defined( __APPLE__ ) || defined( __LINUX__ )
-    return ftell( (FILE*)m_Handle );
+    return lseek( m_Handle, 0, SEEK_CUR );
 #else
     #error Unknown platform
 #endif
@@ -303,13 +299,11 @@ bool FileStream::IsOpen() const
 //------------------------------------------------------------------------------
 /*virtual*/ bool FileStream::Seek( uint64_t pos ) const
 {
-    FSDEBUG( DEBUGSPAM( "Seek to %" PRIu64 ", %x on %x\n", pos, m_Handle, Thread::GetCurrentThreadId() ); )
-
     ASSERT( IsOpen() );
 
 #if defined( __WINDOWS__ )
     LARGE_INTEGER newPos;
-    newPos.QuadPart = pos;
+    newPos.QuadPart = (int64_t)pos;
     if ( FALSE == SetFilePointerEx( (HANDLE)m_Handle, newPos, nullptr, FILE_BEGIN ) )
     {
         return false;
@@ -317,7 +311,7 @@ bool FileStream::IsOpen() const
     return true;
 #elif defined( __APPLE__ ) || defined( __LINUX__ )
     ASSERT( pos <= 0xFFFFFFFF ); // only support 4GB files for seek on OSX/IOS
-    fseek( (FILE*)m_Handle, pos, SEEK_SET );
+    lseek( m_Handle, pos, SEEK_SET );
     return true; // TODO:MAC check EOF for consistency with windows
 #else
     #error Unknown platform
@@ -328,8 +322,6 @@ bool FileStream::IsOpen() const
 //------------------------------------------------------------------------------
 /*virtual*/ uint64_t FileStream::GetFileSize() const
 {
-    FSDEBUG( DEBUGSPAM( "GetFileSize %x on %x\n", m_Handle, Thread::GetCurrentThreadId() ); )
-
     ASSERT( IsOpen() );
 
     #if defined( __WINDOWS__ )
@@ -342,8 +334,8 @@ bool FileStream::IsOpen() const
         uint64_t originalPos = Tell();
 
         // seek to end
-        fseek( (FILE *)m_Handle, 0, SEEK_END );
-        uint64_t size = ftell( (FILE*)m_Handle );
+        lseek( m_Handle, 0, SEEK_END );
+        uint64_t size = Tell();
 
         // seek back to the original pos
         VERIFY( Seek( originalPos ) );

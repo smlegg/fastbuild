@@ -1,14 +1,29 @@
 <!DOCTYPE html>
 <link href="../style.css" rel="stylesheet" type="text/css">
-<script type="text/javascript" src="../common.js"></script>
 
-<html>
+<html lang="en-US">
 <head>
+<meta charset="utf-8">
 <link rel="shortcut icon" href="../../favicon.ico">
 <title>FASTBuild - Troubleshooting - Distributed Compilation</title>
 </head>
 <body>
-  <script>generateHeaderParent()</script>
+	<div class='outer'>
+        <div>
+            <div class='logobanner'>
+                <a href='../home.html'><img src='../img/logo.png' style='position:relative;'/></a>
+	            <div class='contact'><a href='../contact.html' class='othernav'>Contact</a> &nbsp; | &nbsp; <a href='../license.html' class='othernav'>License</a></div>
+	        </div>
+	    </div>
+	    <div id='main'>
+	        <div class='navbar'>
+	            <a href='../home.html' class='lnavbutton'>Home</a><div class='navbuttonbreak'><div class='navbuttonbreakinner'></div></div>
+	            <a href='../features.html' class='navbutton'>Features</a><div class='navbuttonbreak'><div class='navbuttonbreakinner'></div></div>
+	            <a href='../status.html' class='navbutton'>Status</a><div class='navbuttonbreak'><div class='navbuttonbreakinner'></div></div>
+	            <a href='../documentation.html' class='navbutton'>Documentation</a><div class='navbuttongap'></div>
+	            <a href='../download.html' class='rnavbutton'><b>Download</b></a>
+	        </div>
+	        <div class='inner'>
 
 <h1>Distributed Compilation Troubleshooting</h1>
     <div id='alias' class='newsitemheader'>
@@ -103,7 +118,7 @@
         function in the BFF config. If you are using a compiler (such as MSVC) that requires additional
          DLLs, be sure to configure those as well (see <a href="../functions/compiler.html">Compiler()</a>
          for more details).</p>
-  <h4>3. Ensure Compatible Compatible Options</h4> 
+  <h4>3. Ensure Compatible Options</h4> 
       <p>Some compiler options prevent distribution as described 
          <a href="../features/distribution.html">here</a>. Use -showcmds to ensure none
          of those options are on your command line.</p> 
@@ -124,6 +139,6 @@
 </div>
 
 
-  <script>generateFooter()</script>
+    </div><div class='footer'>&copy; 2012-2020 Franta Fulin</div></div></div>
 </body>
 </html>

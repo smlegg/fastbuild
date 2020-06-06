@@ -3,8 +3,6 @@
 
 // Includes
 //------------------------------------------------------------------------------
-#include "Tools/FBuild/FBuildCore/PrecompiledHeader.h"
-
 #include "AliasNode.h"
 
 #include "Tools/FBuild/FBuildCore/BFF/Functions/Function.h"
@@ -18,27 +16,27 @@
 //------------------------------------------------------------------------------
 REFLECT_NODE_BEGIN( AliasNode, Node, MetaNone() )
     REFLECT_ARRAY( m_Targets,   "Targets",          MetaFile() + MetaAllowNonFile() )
+    REFLECT( m_Hidden,          "Hidden",           MetaOptional() )
 REFLECT_END( AliasNode )
 
 // CONSTRUCTOR
 //------------------------------------------------------------------------------
 AliasNode::AliasNode()
-: Node( AString::GetEmpty(), Node::ALIAS_NODE, Node::FLAG_TRIVIAL_BUILD )
+    : Node( AString::GetEmpty(), Node::ALIAS_NODE, Node::FLAG_ALWAYS_BUILD )
 {
     m_LastBuildTimeMs = 1; // almost no work is done for this node
 }
 
 // Initialize
 //------------------------------------------------------------------------------
-bool AliasNode::Initialize( NodeGraph & nodeGraph, const BFFIterator & iter, const Function * function )
+/*virtual*/ bool AliasNode::Initialize( NodeGraph & nodeGraph, const BFFToken * iter, const Function * function )
 {
-    // TODO:B make this use m_Targets
     Dependencies targets( 32, true );
-    const bool required = true;
     const bool allowCopyDirNodes = true;
     const bool allowUnityNodes = true;
     const bool allowRemoveDirNodes = true;
-    if ( !function->GetNodeList( nodeGraph, iter, ".Targets", targets, required, allowCopyDirNodes, allowUnityNodes, allowRemoveDirNodes ) )
+    const bool allowCompilerNodes = true;
+    if ( !Function::GetNodeList( nodeGraph, iter, function, ".Targets", m_Targets, targets, allowCopyDirNodes, allowUnityNodes, allowRemoveDirNodes, allowCompilerNodes ) )
     {
         return false; // GetNodeList will have emitted an error
     }
@@ -52,17 +50,9 @@ bool AliasNode::Initialize( NodeGraph & nodeGraph, const BFFIterator & iter, con
 //------------------------------------------------------------------------------
 AliasNode::~AliasNode() = default;
 
-// DetermineNeedToBuild
-//------------------------------------------------------------------------------
-/*virtual*/ bool AliasNode::DetermineNeedToBuild( bool forceClean ) const
-{
-    (void)forceClean;
-    return true;
-}
-
 // DoBuild
 //------------------------------------------------------------------------------
-/*virtual*/ Node::BuildResult AliasNode::DoBuild( Job * UNUSED( job ) )
+/*virtual*/ Node::BuildResult AliasNode::DoBuild( Job * /*job*/ )
 {
     const Dependencies::Iter end = m_StaticDependencies.End();
     for ( Dependencies::Iter it = m_StaticDependencies.Begin();
@@ -83,29 +73,6 @@ AliasNode::~AliasNode() = default;
         }
     }
     return NODE_RESULT_OK;
-}
-
-// Load
-//------------------------------------------------------------------------------
-/*static*/ Node * AliasNode::Load( NodeGraph & nodeGraph, IOStream & stream )
-{
-    NODE_LOAD( AStackString<>, name );
-
-    AliasNode * an = nodeGraph.CreateAliasNode( name );
-
-    if ( an->Deserialize( nodeGraph, stream ) == false )
-    {
-        return nullptr;
-    }
-    return an;
-}
-
-// Save
-//------------------------------------------------------------------------------
-/*virtual*/ void AliasNode::Save( IOStream & stream ) const
-{
-    NODE_SAVE( m_Name );
-    Node::Serialize( stream );
 }
 
 //------------------------------------------------------------------------------

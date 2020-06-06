@@ -3,8 +3,6 @@
 
 // Includes
 //------------------------------------------------------------------------------
-#include "Core/PrecompiledHeader.h"
-
 #include "IOStream.h"
 #include "Core/Math/Conversions.h"
 #include "Core/Strings/AString.h"
@@ -38,7 +36,7 @@ void IOStream::AlignRead( size_t alignment )
 {
     const uint64_t tell = Tell();
     const uint64_t toSkip = Math::RoundUp( tell, (uint64_t)alignment ) - tell;
-    for ( uint64_t i=0; i<toSkip; ++i )
+    for ( uint64_t i = 0; i < toSkip; ++i )
     {
         uint8_t tmp;
         Read( tmp );
@@ -52,7 +50,7 @@ void IOStream::AlignWrite( size_t alignment )
 {
     const uint64_t tell = Tell();
     const uint64_t toPad = Math::RoundUp( tell, (uint64_t)alignment ) - tell;
-    for ( uint64_t i=0; i<toPad; ++i )
+    for ( uint64_t i = 0; i < toPad; ++i )
     {
         uint8_t padChar( 0 );
         Write( padChar );

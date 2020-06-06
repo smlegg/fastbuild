@@ -21,11 +21,7 @@ public:
 
 protected:
 	virtual bool AcceptsHeader() const override;
-
-	virtual bool Commit(NodeGraph & nodeGraph, const BFFIterator & funcStartIter) const override;
-
-	VSCodeProjectNode * ResolveVSCodeProject( NodeGraph & nodeGraph, const BFFIterator & iter, const AString & projectName ) const;
-	bool GetStringFromStruct( const BFFVariable * s, const char * name, AString & result ) const;
+    virtual Node * CreateNode() const override;
 };
 
 //------------------------------------------------------------------------------

@@ -3,8 +3,6 @@
 
 // Includes
 //------------------------------------------------------------------------------
-#include "Tools/FBuild/FBuildCore/PrecompiledHeader.h"
-
 #include "FunctionDLL.h"
 
 // FBuildCore
@@ -20,34 +18,11 @@ FunctionDLL::FunctionDLL()
     m_Name =  "DLL";
 }
 
-// Commit
+// CreateNode
 //------------------------------------------------------------------------------
-/*virtual*/ bool FunctionDLL::Commit( NodeGraph & nodeGraph, const BFFIterator & funcStartIter ) const
+/*virtual*/ Node * FunctionDLL::CreateNode() const
 {
-    AStackString<> name;
-    if ( GetNameForNode( nodeGraph, funcStartIter, DLLNode::GetReflectionInfoS(), name ) == false )
-    {
-        return false;
-    }
-    if ( nodeGraph.FindNode( name ) )
-    {
-        Error::Error_1100_AlreadyDefined( funcStartIter, this, name );
-        return false;
-    }
-
-    DLLNode * dllNode = nodeGraph.CreateDLLNode( name );
-
-    if ( !PopulateProperties( nodeGraph, funcStartIter, dllNode ) )
-    {
-        return false;
-    }
-
-    if ( !dllNode->Initialize( nodeGraph, funcStartIter, this ) )
-    {
-        return false;
-    }
-
-    return ProcessAlias( nodeGraph, funcStartIter, dllNode );
+    return FNEW( DLLNode );
 }
 
 //------------------------------------------------------------------------------

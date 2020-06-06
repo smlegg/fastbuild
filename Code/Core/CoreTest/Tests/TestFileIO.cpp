@@ -13,6 +13,11 @@
 #include "Core/Process/Thread.h"
 #include "Core/Strings/AStackString.h"
 
+// system
+#if defined( __LINUX__ )
+    #include <unistd.h>
+#endif
+
 // TestFileIO
 //------------------------------------------------------------------------------
 class TestFileIO : public UnitTest
@@ -23,6 +28,7 @@ private:
     void FileExists() const;
     void FileDelete() const;
     void FileCopy() const;
+    void FileCopySymlink() const;
     void FileMove() const;
 
     void ReadOnly() const;
@@ -40,6 +46,7 @@ REGISTER_TESTS_BEGIN( TestFileIO )
     REGISTER_TEST( FileExists )
     REGISTER_TEST( FileDelete )
     REGISTER_TEST( FileCopy )
+    REGISTER_TEST( FileCopySymlink )
     REGISTER_TEST( FileMove )
     REGISTER_TEST( ReadOnly )
     REGISTER_TEST( FileTime )
@@ -134,6 +141,64 @@ void TestFileIO::FileCopy() const
     VERIFY( FileIO::FileDelete( pathCopy.Get() ) );
 }
 
+// FileCopySymlink
+//------------------------------------------------------------------------------
+void TestFileIO::FileCopySymlink() const
+{
+    #if defined( __WINDOWS__ ) || defined ( __APPLE__ )
+        // Not tested on Windows/MacOS as symlinks are directly supported
+        // by the file copy API.  Also on Windows, it would make unit
+        // tests require administrator privileges.
+    #elif defined ( __LINUX__ )
+        AStackString<> symlinkTarget( "symlink" );
+
+        // generate a process unique file path
+        AStackString<> path;
+        GenerateTempFileName( path );
+
+        // generate copy file name
+        AStackString<> pathCopy( path );
+        pathCopy += ".copy";
+
+        // make sure nothing is left from previous runs
+        FileIO::FileDelete( path.Get() );
+        FileIO::FileDelete( pathCopy.Get() );
+        TEST_ASSERT( FileIO::FileExists( path.Get() ) == false );
+        TEST_ASSERT( FileIO::FileExists( pathCopy.Get() ) == false );
+
+        // create it
+        TEST_ASSERT( symlink( symlinkTarget.Get(), path.Get() ) == 0 );
+
+        // copy it
+        TEST_ASSERT( FileIO::FileCopy( path.Get(), pathCopy.Get() ) );
+        TEST_ASSERT( FileIO::FileExists( pathCopy.Get() ) == true );
+
+        // validate link
+        AStackString<> linkPath;
+        ssize_t length = readlink( pathCopy.Get(), linkPath.Get(), linkPath.GetReserved() );
+        TEST_ASSERT( length == symlinkTarget.GetLength() );
+        linkPath.SetLength( length );
+        TEST_ASSERT( linkPath == symlinkTarget );
+
+        // ensure attributes are transferred properly
+        FileIO::FileInfo sourceInfo;
+        TEST_ASSERT( FileIO::GetFileInfo( path, sourceInfo ) == true );
+        FileIO::FileInfo destInfo;
+        TEST_ASSERT( FileIO::GetFileInfo( pathCopy, destInfo ) == true );
+        TEST_ASSERT( destInfo.m_Attributes == sourceInfo.m_Attributes );
+
+        // copy without overwrite allowed should fail
+        const bool allowOverwrite = false;
+        TEST_ASSERT( FileIO::FileCopy( path.Get(), pathCopy.Get(), allowOverwrite ) == false );
+
+        // cleanup
+        VERIFY( FileIO::FileDelete( path.Get() ) );
+        VERIFY( FileIO::FileDelete( pathCopy.Get() ) );
+    #else
+        #error Unknown platform
+    #endif
+}
+
 // FileMove
 //------------------------------------------------------------------------------
 void TestFileIO::FileMove() const
@@ -212,23 +277,26 @@ void TestFileIO::FileTime() const
     const uint64_t oldTime = FileIO::GetFileLastWriteTime( path );
     TEST_ASSERT( oldTime != 0 );
 
-    // wait for some time that is bigger than filesystem time granularity
-    #if defined( __OSX__ )
-        // HFS+ has surprisingly poor time resolution (1 second)
-        Thread::Sleep( 1100 );
-    #else
-        Thread::Sleep( 500 );
-    #endif
+    // Modify the file until the filetime changes. This can be surprisingly
+    // long on OSX due to poor HFS+ filetime granularity
+    uint64_t newTime = 0;
+    for ( ;; )
+    {
+        Thread::Sleep( 10 );
 
-    // modify file
-    FileStream f2;
-    TEST_ASSERT( f.Open( path.Get(), FileStream::WRITE_ONLY ) == true );
-    f.Write( (uint32_t)0 );
-    f.Close();
+        // modify file
+        FileStream f2;
+        TEST_ASSERT( f.Open( path.Get(), FileStream::WRITE_ONLY ) == true );
+        f.Write( (uint32_t)0 );
+        f.Close();
 
-    // get new last write time
-    const uint64_t newTime = FileIO::GetFileLastWriteTime( path );
-    TEST_ASSERT( newTime > oldTime );
+        // get new last write time
+        newTime = FileIO::GetFileLastWriteTime( path );
+        if ( newTime > oldTime )
+        {
+            break;
+        }
+    }
 
     // manually set time back
     TEST_ASSERT( FileIO::SetFileLastWriteTime( path, oldTime ) == true );

@@ -3,8 +3,6 @@
 
 // Includes
 //------------------------------------------------------------------------------
-#include "Tools/FBuild/FBuildCore/PrecompiledHeader.h"
-
 #include "Function.h"
 #include "FunctionAlias.h"
 #include "FunctionCompiler.h"
@@ -12,6 +10,7 @@
 #include "FunctionCopyDir.h"
 #include "FunctionCSAssembly.h"
 #include "FunctionDLL.h"
+#include "FunctionError.h"
 #include "FunctionExec.h"
 #include "FunctionExecutable.h"
 #include "FunctionForEach.h"
@@ -21,25 +20,30 @@
 #include "FunctionPrint.h"
 #include "FunctionRemoveDir.h"
 #include "FunctionSettings.h"
-#include "FunctionSLN.h"
 #include "FunctionTest.h"
+#include "FunctionTextFile.h"
 #include "FunctionUnity.h"
 #include "FunctionUsing.h"
 #include "FunctionVCXProject.h"
+#include "FunctionVSProjectExternal.h"
+#include "FunctionVSSolution.h"
 #include "FunctionXCodeProject.h"
 #include "FunctionVSCodeProject.h"
 #include "FunctionVSCodeWorkspace.h"
 
-#include "Tools/FBuild/FBuildCore/BFF/BFFIterator.h"
 #include "Tools/FBuild/FBuildCore/BFF/BFFParser.h"
 #include "Tools/FBuild/FBuildCore/BFF/BFFStackFrame.h"
 #include "Tools/FBuild/FBuildCore/BFF/BFFVariable.h"
+#include "Tools/FBuild/FBuildCore/BFF/Tokenizer/BFFTokenRange.h"
 #include "Tools/FBuild/FBuildCore/FBuild.h"
 #include "Tools/FBuild/FBuildCore/Graph/AliasNode.h"
+#include "Tools/FBuild/FBuildCore/Graph/CompilerNode.h"
 #include "Tools/FBuild/FBuildCore/Graph/DirectoryListNode.h"
 #include "Tools/FBuild/FBuildCore/Graph/FileNode.h"
 #include "Tools/FBuild/FBuildCore/Graph/NodeGraph.h"
 #include "Tools/FBuild/FBuildCore/Graph/MetaData/Meta_AllowNonFile.h"
+#include "Tools/FBuild/FBuildCore/Graph/MetaData/Meta_EmbedMembers.h"
+#include "Tools/FBuild/FBuildCore/Graph/MetaData/Meta_InheritFromOwner.h"
 #include "Tools/FBuild/FBuildCore/Graph/MetaData/Meta_Name.h"
 
 // Core
@@ -58,31 +62,15 @@
 
 // Static
 //------------------------------------------------------------------------------
-/*static*/ Function * Function::s_FirstFunction = nullptr;
+/*static*/ Array<const Function *> g_Functions( 26, false );
 
 // CONSTRUCTOR
 //------------------------------------------------------------------------------
 Function::Function( const char * name )
-: m_NextFunction( nullptr )
-, m_Name( name )
+: m_Name( name )
 , m_Seen( false )
 , m_AliasForFunction( 256 )
 {
-    if ( s_FirstFunction == nullptr )
-    {
-        s_FirstFunction = this;
-        return;
-    }
-    Function * func = s_FirstFunction;
-    while ( func )
-    {
-        if ( func->m_NextFunction == nullptr )
-        {
-            func->m_NextFunction = this;
-            return;
-        }
-        func = func->m_NextFunction;
-    }
 }
 
 // DESTRUCTOR
@@ -93,14 +81,12 @@ Function::~Function() = default;
 //------------------------------------------------------------------------------
 /*static*/ const Function * Function::Find( const AString & name )
 {
-    Function * func = s_FirstFunction;
-    while ( func )
+    for ( const Function * func : g_Functions )
     {
         if ( func->GetName() == name )
         {
             return func;
         }
-        func = func->m_NextFunction;
     }
     return nullptr;
 }
@@ -109,43 +95,44 @@ Function::~Function() = default;
 //------------------------------------------------------------------------------
 /*static*/ void Function::Create()
 {
-    FNEW( FunctionAlias );
-    FNEW( FunctionCompiler );
-    FNEW( FunctionCopy );
-    FNEW( FunctionCopyDir );
-    FNEW( FunctionCSAssembly );
-    FNEW( FunctionDLL );
-    FNEW( FunctionExec );
-    FNEW( FunctionExecutable );
-    FNEW( FunctionForEach );
-    FNEW( FunctionIf );
-    FNEW( FunctionLibrary );
-    FNEW( FunctionPrint );
-    FNEW( FunctionRemoveDir );
-    FNEW( FunctionSettings );
-    FNEW( FunctionSLN );
-    FNEW( FunctionTest );
-    FNEW( FunctionUnity );
-    FNEW( FunctionUsing );
-    FNEW( FunctionVCXProject );
-    FNEW( FunctionObjectList );
-    FNEW( FunctionXCodeProject );
-	FNEW( FunctionVSCodeProject );
-	FNEW( FunctionVSCodeWorkspace );
+    g_Functions.Append( FNEW( FunctionAlias ) );
+    g_Functions.Append( FNEW( FunctionCompiler ) );
+    g_Functions.Append( FNEW( FunctionCopy ) );
+    g_Functions.Append( FNEW( FunctionCopyDir ) );
+    g_Functions.Append( FNEW( FunctionCSAssembly ) );
+    g_Functions.Append( FNEW( FunctionDLL ) );
+    g_Functions.Append( FNEW( FunctionError ) );
+    g_Functions.Append( FNEW( FunctionExec ) );
+    g_Functions.Append( FNEW( FunctionExecutable ));
+    g_Functions.Append( FNEW( FunctionForEach ) );
+    g_Functions.Append( FNEW( FunctionIf ) );
+    g_Functions.Append( FNEW( FunctionLibrary ) );
+    g_Functions.Append( FNEW( FunctionObjectList ) );
+    g_Functions.Append( FNEW( FunctionPrint ) );
+    g_Functions.Append( FNEW( FunctionRemoveDir ) );
+    g_Functions.Append( FNEW( FunctionSettings ) );
+    g_Functions.Append( FNEW( FunctionTest ) );
+    g_Functions.Append( FNEW( FunctionTextFile ) );
+    g_Functions.Append( FNEW( FunctionUnity ) );
+    g_Functions.Append( FNEW( FunctionUsing ) );
+    g_Functions.Append( FNEW( FunctionVCXProject ) );
+    g_Functions.Append( FNEW( FunctionVSProjectExternal ) );
+    g_Functions.Append( FNEW( FunctionVSSolution ) );
+    g_Functions.Append( FNEW( FunctionXCodeProject ) );
+    g_Functions.Append( FNEW( FunctionVSCodeProject ) );
+	g_Functions.Append( FNEW( FunctionVSCodeWorkspace ) );
+
 }
 
 // Destroy
 //------------------------------------------------------------------------------
 /*static*/ void Function::Destroy()
 {
-    Function * func = s_FirstFunction;
-    while ( func )
+    for ( const Function * func : g_Functions )
     {
-        Function * nextFunc = func->m_NextFunction;
         FDELETE func;
-        func = nextFunc;
     }
-    s_FirstFunction = nullptr;
+    g_Functions.Clear();
 }
 
 // AcceptsHeader
@@ -169,6 +156,14 @@ Function::~Function() = default;
     return true;
 }
 
+// CreateNode
+//------------------------------------------------------------------------------
+/*virtual*/ Node * Function::CreateNode() const
+{
+    ASSERT( false ); // Should never get here for Functions that have no Node
+    return nullptr;
+}
+
 // IsUnique
 //------------------------------------------------------------------------------
 /*virtual*/ bool Function::IsUnique() const
@@ -179,71 +174,151 @@ Function::~Function() = default;
 // ParseFunction
 //------------------------------------------------------------------------------
 /*virtual*/ bool Function::ParseFunction( NodeGraph & nodeGraph,
-                                          const BFFIterator & functionNameStart,
-                                          const BFFIterator * functionBodyStartToken,
-                                          const BFFIterator * functionBodyStopToken,
-                                          const BFFIterator * functionHeaderStartToken,
-                                          const BFFIterator * functionHeaderStopToken ) const
+                                          BFFParser & parser,
+                                          const BFFToken * functionNameStart,
+                                          const BFFTokenRange & headerRange,
+                                          const BFFTokenRange & bodyRange ) const
 {
     m_AliasForFunction.Clear();
-    if ( AcceptsHeader() &&
-         functionHeaderStartToken && functionHeaderStopToken &&
-         ( functionHeaderStartToken->GetDistTo( *functionHeaderStopToken ) > 1 ) )
+    if ( AcceptsHeader() && ( headerRange.IsEmpty() == false ) )
     {
-        // find opening quote
-        BFFIterator start( *functionHeaderStartToken );
-        ASSERT( *start == BFFParser::BFF_FUNCTION_ARGS_OPEN );
-        start++;
-        start.SkipWhiteSpace();
-        const char c = *start;
-        if ( ( c != '"' ) && ( c != '\'' ) )
+        // Check for exactly one string
+        const BFFToken * headerArgsIter = headerRange.GetCurrent();
+        if ( headerArgsIter->IsString() )
         {
-            Error::Error_1001_MissingStringStartToken( start, this );
-            return false;
-        }
-        BFFIterator stop( start );
-        stop.SkipString( c );
-        ASSERT( stop.GetCurrent() <= functionHeaderStopToken->GetCurrent() ); // should not be in this function if strings are not validly terminated
-        if ( start.GetDistTo( stop ) <= 1 )
-        {
-            Error::Error_1003_EmptyStringNotAllowedInHeader( start, this );
-            return false;
-        }
+            // Ensure string is not empty
+            if ( headerArgsIter->GetValueString().IsEmpty() )
+            {
+                Error::Error_1003_EmptyStringNotAllowedInHeader( headerArgsIter, this );
+                return false;
+            }
 
-        // store alias name for use in Commit
-        start++; // skip past opening quote
-        if ( BFFParser::PerformVariableSubstitutions( start, stop, m_AliasForFunction ) == false )
+            // Store alias name for use in Commit
+            if ( BFFParser::PerformVariableSubstitutions( headerArgsIter, m_AliasForFunction ) == false )
+            {
+                return false; // substitution will have emitted an error
+            }
+        }
+        else if ( NeedsHeader() )
         {
-            return false; // substitution will have emitted an error
+            Error::Error_1001_MissingStringStartToken( headerArgsIter, this );
+            return false;
+        }
+        ++headerArgsIter;
+
+        // make sure there are no extraneous tokens
+        if ( headerArgsIter != headerRange.GetEnd() )
+        {
+            Error::Error_1002_MatchingClosingTokenNotFound( headerArgsIter, this, BFFParser::BFF_FUNCTION_ARGS_CLOSE );
+            return false;
         }
     }
 
     // parse the function body
-    BFFParser subParser( nodeGraph );
-    BFFIterator subIter( *functionBodyStartToken );
-    subIter++; // skip past opening body token
-    subIter.SetMax( functionBodyStopToken->GetCurrent() ); // cap parsing to body end
-    if ( subParser.Parse( subIter ) == false )
+    BFFTokenRange range( bodyRange );
+    if ( parser.Parse( range ) == false )
     {
         return false;
     }
 
+    // Take note of how many nodes there are before Commit
+    const size_t nodeCountBefore = nodeGraph.GetNodeCount();
+
     // complete the function
-    return Commit( nodeGraph, functionNameStart );
+    if (!Commit( nodeGraph, functionNameStart ))
+    {
+        return false;
+    }
+
+    // Check for cyclic dependencies
+    const size_t nodeCountAfter = nodeGraph.GetNodeCount();
+    if ( nodeCountBefore != nodeCountAfter )
+    {
+        for ( size_t index = nodeCountBefore; index < nodeCountAfter; ++index )
+        {
+            const Node* node = nodeGraph.GetNodeByIndex( index );
+
+            const Dependencies * depVectors[ 3 ] = { &node->GetPreBuildDependencies(),
+                                                     &node->GetStaticDependencies(),
+                                                     &node->GetDynamicDependencies() };
+            for ( const Dependencies * depVector : depVectors )
+            {
+                for ( const Dependency & dep : *depVector )
+                {
+                    if ( node == dep.GetNode() )
+                    {
+                        Error::Error_1043_CyclicDependencyDetected( functionNameStart, node->GetName() );
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+
+    return true;
 }
 
 // Commit
 //------------------------------------------------------------------------------
-/*virtual*/ bool Function::Commit( NodeGraph & nodeGraph, const BFFIterator & funcStartIter ) const
+/*virtual*/ bool Function::Commit( NodeGraph & nodeGraph, const BFFToken * funcStartIter ) const
 {
-    (void)nodeGraph;
-    (void)funcStartIter;
-    return true;
+    // Create Node
+    Node * node = CreateNode();
+    ASSERT( node );
+
+    // Get the name
+    //  - For nodes that specify a name as a property (usually the output of the node)
+    //    use that as the name (i.e. the filename is the name)
+    //  - Otherwise, what would normally be the alias
+    AStackString<> nameFromMetaData;
+    if ( GetNameForNode( nodeGraph, funcStartIter, node->GetReflectionInfoV(), nameFromMetaData ) == false )
+    {
+        FDELETE node;
+        return false; // GetNameForNode will have emitted an error
+    }
+    const bool aliasUsedForName = nameFromMetaData.IsEmpty();
+    const AString & name = ( aliasUsedForName ) ? m_AliasForFunction : nameFromMetaData;
+    ASSERT( name.IsEmpty() == false );
+
+    // Check name isn't already used
+    if ( nodeGraph.FindNode( name ) )
+    {
+        Error::Error_1100_AlreadyDefined( funcStartIter, this, name );
+        FDELETE node;
+        return false;
+    }
+
+    // Set Name
+    node->SetName( name );
+
+    // Register with NodeGraph
+    nodeGraph.RegisterNode( node );
+
+    // Set properties
+    if ( !PopulateProperties( nodeGraph, funcStartIter, node ) )
+    {
+        return false; // PopulateProperties will have emitted an error
+    }
+
+    // Initialize
+    if ( !node->Initialize( nodeGraph, funcStartIter, this ) )
+    {
+        return false; // Initialize will have emitted an error
+    }
+
+    // If alias was used for name, we're done
+    if ( aliasUsedForName )
+    {
+        return true;
+    }
+
+    // handle alias creation
+    return ProcessAlias( nodeGraph, funcStartIter, node );
 }
 
 // GetString
 //------------------------------------------------------------------------------
-bool Function::GetString( const BFFIterator & iter, const BFFVariable * & var, const char * name, bool required ) const
+bool Function::GetString( const BFFToken * iter, const BFFVariable * & var, const char * name, bool required ) const
 {
     ASSERT( name );
     var = nullptr;
@@ -277,7 +352,7 @@ bool Function::GetString( const BFFIterator & iter, const BFFVariable * & var, c
 
 // GetString
 //------------------------------------------------------------------------------
-bool Function::GetString( const BFFIterator & iter, AString & var, const char * name, bool required ) const
+bool Function::GetString( const BFFToken * iter, AString & var, const char * name, bool required ) const
 {
     const  BFFVariable * stringVar;
     if ( !GetString( iter, stringVar, name, required ) )
@@ -293,7 +368,7 @@ bool Function::GetString( const BFFIterator & iter, AString & var, const char * 
 
 // GetStringOrArrayOfStrings
 //------------------------------------------------------------------------------
-bool Function::GetStringOrArrayOfStrings( const BFFIterator & iter, const BFFVariable * & var, const char * name, bool required ) const
+bool Function::GetStringOrArrayOfStrings( const BFFToken * iter, const BFFVariable * & var, const char * name, bool required ) const
 {
     ASSERT( name );
     var = nullptr;
@@ -322,85 +397,17 @@ bool Function::GetStringOrArrayOfStrings( const BFFIterator & iter, const BFFVar
     return false;
 }
 
-// GetBool
-//------------------------------------------------------------------------------
-bool Function::GetBool( const BFFIterator & iter, bool & var, const char * name, bool defaultValue, bool required ) const
-{
-    ASSERT( name );
-
-    const BFFVariable * v = BFFStackFrame::GetVar( name );
-    if ( v == nullptr )
-    {
-        if ( required )
-        {
-            Error::Error_1101_MissingProperty( iter, this, AStackString<>( name ) );
-            return false;
-        }
-        var = defaultValue;
-        return true;
-    }
-
-    if ( v->IsBool() == false )
-    {
-        Error::Error_1050_PropertyMustBeOfType( iter, this, name, v->GetType(), BFFVariable::VAR_BOOL );
-        return false;
-    }
-
-    var = v->GetBool();
-    return true;
-}
-
-// GetInt
-//------------------------------------------------------------------------------
-bool Function::GetInt( const BFFIterator & iter, int32_t & var, const char * name, int32_t defaultValue, bool required ) const
-{
-    ASSERT( name );
-
-    const BFFVariable * v = BFFStackFrame::GetVar( name );
-    if ( v == nullptr )
-    {
-        if ( required )
-        {
-            Error::Error_1101_MissingProperty( iter, this, AStackString<>( name ) );
-            return false;
-        }
-        var = defaultValue;
-        return true;
-    }
-
-    if ( v->IsInt() == false )
-    {
-        Error::Error_1050_PropertyMustBeOfType( iter, this, name, v->GetType(), BFFVariable::VAR_INT );
-        return false;
-    }
-
-    var = v->GetInt();
-    return true;
-}
-
-
-// GetInt
-//------------------------------------------------------------------------------
-bool Function::GetInt( const BFFIterator & iter, int32_t & var, const char * name, int32_t defaultValue, bool required, int minVal, int maxVal ) const
-{
-    if ( GetInt( iter, var, name, defaultValue, required ) == false )
-    {
-        return false;
-    }
-
-    // enforce additional limits
-    if ( ( var < minVal ) || ( var > maxVal ) )
-    {
-        Error::Error_1054_IntegerOutOfRange( iter, this, name, minVal, maxVal );
-        return false;
-    }
-    return true;
-}
-
 // GetNodeList
 //------------------------------------------------------------------------------
-bool Function::GetNodeList( NodeGraph & nodeGraph, const BFFIterator & iter, const char * propertyName, Dependencies & nodes, bool required,
-                            bool allowCopyDirNodes, bool allowUnityNodes, bool allowRemoveDirNodes ) const
+bool Function::GetNodeList( NodeGraph & nodeGraph,
+                            const BFFToken * iter,
+                            const char * propertyName,
+                            Dependencies & nodes,
+                            bool required,
+                            bool allowCopyDirNodes,
+                            bool allowUnityNodes,
+                            bool allowRemoveDirNodes,
+                            bool allowCompilerNodes ) const
 {
     ASSERT( propertyName );
 
@@ -429,7 +436,7 @@ bool Function::GetNodeList( NodeGraph & nodeGraph, const BFFIterator & iter, con
                 return false;
             }
 
-            if ( !GetNodeList( nodeGraph, iter, this, propertyName, nodeName, nodes, allowCopyDirNodes, allowUnityNodes, allowRemoveDirNodes ) )
+            if ( !GetNodeList( nodeGraph, iter, this, propertyName, nodeName, nodes, allowCopyDirNodes, allowUnityNodes, allowRemoveDirNodes, allowCompilerNodes ) )
             {
                 // child func will have emitted error
                 return false;
@@ -444,7 +451,7 @@ bool Function::GetNodeList( NodeGraph & nodeGraph, const BFFIterator & iter, con
             return false;
         }
 
-        if ( !GetNodeList( nodeGraph, iter, this, propertyName, var->GetString(), nodes, allowCopyDirNodes, allowUnityNodes, allowRemoveDirNodes ) )
+        if ( !GetNodeList( nodeGraph, iter, this, propertyName, var->GetString(), nodes, allowCopyDirNodes, allowUnityNodes, allowRemoveDirNodes, allowCompilerNodes ) )
         {
             // child func will have emitted error
             return false;
@@ -462,16 +469,18 @@ bool Function::GetNodeList( NodeGraph & nodeGraph, const BFFIterator & iter, con
 
 // GetDirectoryNodeList
 //------------------------------------------------------------------------------
-bool Function::GetDirectoryListNodeList( NodeGraph & nodeGraph,
-                                         const BFFIterator & iter,
-                                         const Array< AString > & paths,
-                                         const Array< AString > & excludePaths,
-                                         const Array< AString > & filesToExclude,
-                                         const Array< AString > & excludePatterns,
-                                         bool recurse,
-                                         const Array< AString > * patterns,
-                                         const char * inputVarName,
-                                         Dependencies & nodes ) const
+/*static*/ bool Function::GetDirectoryListNodeList( NodeGraph & nodeGraph,
+                                                    const BFFToken * iter,
+                                                    const Function * function,
+                                                    const Array< AString > & paths,
+                                                    const Array< AString > & excludePaths,
+                                                    const Array< AString > & filesToExclude,
+                                                    const Array< AString > & excludePatterns,
+                                                    bool recurse,
+                                                    bool includeReadOnlyStatusInHash,
+                                                    const Array< AString > * patterns,
+                                                    const char * inputVarName,
+                                                    Dependencies & nodes )
 {
     // Handle special case of excluded files beginning with ../
     // Since they can be used sensibly by matching just the end
@@ -497,7 +506,14 @@ bool Function::GetDirectoryListNodeList( NodeGraph & nodeGraph,
 
         // get node for the dir we depend on
         AStackString<> name;
-        DirectoryListNode::FormatName( path, patterns, recurse, excludePaths, filesToExcludeCleaned, excludePatterns, name );
+        DirectoryListNode::FormatName( path,
+                                       patterns,
+                                       recurse,
+                                       includeReadOnlyStatusInHash,
+                                       excludePaths,
+                                       filesToExcludeCleaned,
+                                       excludePatterns,
+                                       name );
         Node * node = nodeGraph.FindNode( name );
         if ( node == nullptr )
         {
@@ -512,29 +528,104 @@ bool Function::GetDirectoryListNodeList( NodeGraph & nodeGraph,
             dln->m_ExcludePaths = excludePaths;
             dln->m_FilesToExclude = filesToExcludeCleaned;
             dln->m_ExcludePatterns = excludePatterns;
-            if ( !dln->Initialize( nodeGraph, iter, this ) )
+            dln->m_IncludeReadOnlyStatusInHash = includeReadOnlyStatusInHash;
+            if ( !dln->Initialize( nodeGraph, iter, function ) )
             {
                 return false; // Initialize will have emitted an error
             }
         }
         else if ( node->GetType() != Node::DIRECTORY_LIST_NODE )
         {
-            Error::Error_1102_UnexpectedType( iter, this, inputVarName, node->GetName(), node->GetType(), Node::DIRECTORY_LIST_NODE );
+            Error::Error_1102_UnexpectedType( iter, function, inputVarName, node->GetName(), node->GetType(), Node::DIRECTORY_LIST_NODE );
             return false;
         }
 
-        nodes.Append( Dependency( node ) );
+        nodes.EmplaceBack( node );
     }
+    return true;
+}
+
+// GetCompilerNode
+//------------------------------------------------------------------------------
+/*static*/ bool Function::GetCompilerNode( NodeGraph & nodeGraph,
+                                           const BFFToken * iter,
+                                           const Function * function,
+                                           const AString & compiler,
+                                           CompilerNode * & compilerNode )
+{
+    Node * cn = nodeGraph.FindNodeExact( compiler );
+    compilerNode = nullptr;
+    if ( cn != nullptr )
+    {
+        // Handle resolving to a file which might be created by an implicit compiler
+        if ( cn->GetType() == Node::FILE_NODE )
+        {
+            // Generate a name for the CompilerNode
+            AStackString<> implicitCompilerNodeName( "?AutoCompiler?" );
+            implicitCompilerNodeName += compiler;
+            Node * implicitCompilerNode = nodeGraph.FindNode( implicitCompilerNodeName );
+            if ( implicitCompilerNode && ( implicitCompilerNode->GetType() == Node::COMPILER_NODE ) )
+            {
+                cn = implicitCompilerNode;
+            }
+        }
+        if ( cn->GetType() != Node::COMPILER_NODE )
+        {
+            Error::Error_1102_UnexpectedType( iter, function, "Compiler", cn->GetName(), cn->GetType(), Node::COMPILER_NODE );
+            return false;
+        }
+        compilerNode = cn->CastTo< CompilerNode >();
+    }
+    else
+    {
+        // create a compiler node - don't allow distribution
+        // (only explicitly defined compiler nodes can be distributed)
+        // set the default executable path to be the compiler exe directory
+
+        // Generate a name for the CompilerNode
+        AStackString<> nodeName( "?AutoCompiler?" );
+        nodeName += compiler;
+
+        // Check if we've already implicitly created this Compiler
+        cn = nodeGraph.FindNode( nodeName );
+        if ( cn )
+        {
+            if ( cn->GetType() != Node::COMPILER_NODE )
+            {
+                Error::Error_1102_UnexpectedType( iter, function, "Compiler", cn->GetName(), cn->GetType(), Node::COMPILER_NODE );
+                return false;
+            }
+            compilerNode = cn->CastTo< CompilerNode >();
+            return true;
+        }
+
+        // Implicitly create the new node
+        compilerNode = nodeGraph.CreateCompilerNode( nodeName );
+        VERIFY( compilerNode->GetReflectionInfoV()->SetProperty( compilerNode, "Executable", compiler ) );
+        VERIFY( compilerNode->GetReflectionInfoV()->SetProperty( compilerNode, "AllowDistribution", false ) );
+        const char * lastSlash = compiler.FindLast( NATIVE_SLASH );
+        if (lastSlash)
+        {
+            AStackString<> executableRootPath( compiler.Get(), lastSlash + 1 );
+            VERIFY( compilerNode->GetReflectionInfoV()->SetProperty( compilerNode, "ExecutableRootPath", executableRootPath ) );
+        }
+        if ( !compilerNode->Initialize( nodeGraph, iter, nullptr ) )
+        {
+            return false; // Initialize will have emitted an error
+        }
+    }
+
     return true;
 }
 
 // GetFileNode
 //------------------------------------------------------------------------------
-bool Function::GetFileNode( NodeGraph & nodeGraph,
-                            const BFFIterator & iter,
-                            const AString & file,
-                            const char * inputVarName,
-                            Dependencies & nodes ) const
+/*static*/ bool Function::GetFileNode( NodeGraph & nodeGraph,
+                                       const BFFToken * iter,
+                                       const Function * function,
+                                       const AString & file,
+                                       const char * inputVarName,
+                                       Dependencies & nodes )
 {
     // get node for the dir we depend on
     Node * node = nodeGraph.FindNode( file );
@@ -544,27 +635,28 @@ bool Function::GetFileNode( NodeGraph & nodeGraph,
     }
     else if ( node->IsAFile() == false )
     {
-        Error::Error_1005_UnsupportedNodeType( iter, this, inputVarName, node->GetName(), node->GetType() );
+        Error::Error_1005_UnsupportedNodeType( iter, function, inputVarName, node->GetName(), node->GetType() );
         return false;
     }
 
-    nodes.Append( Dependency( node ) );
+    nodes.EmplaceBack( node );
     return true;
 }
 
 // GetFileNodes
 //------------------------------------------------------------------------------
-bool Function::GetFileNodes( NodeGraph & nodeGraph,
-                             const BFFIterator & iter,
-                             const Array< AString > & files,
-                             const char * inputVarName,
-                             Dependencies & nodes ) const
+/*static*/ bool Function::GetFileNodes( NodeGraph & nodeGraph,
+                                        const BFFToken * iter,
+                                        const Function * function,
+                                        const Array< AString > & files,
+                                        const char * inputVarName,
+                                        Dependencies & nodes )
 {
     const AString * const  end = files.End();
     for ( const AString * it = files.Begin(); it != end; ++it )
     {
         const AString & file = *it;
-        if (!GetFileNode( nodeGraph, iter, file, inputVarName, nodes ))
+        if (!GetFileNode( nodeGraph, iter, function, file, inputVarName, nodes ))
         {
             return false; // GetFileNode will have emitted an error
         }
@@ -574,11 +666,12 @@ bool Function::GetFileNodes( NodeGraph & nodeGraph,
 
 // GetObjectListNodes
 //------------------------------------------------------------------------------
-bool Function::GetObjectListNodes( NodeGraph & nodeGraph,
-                                   const BFFIterator & iter,
-                                   const Array< AString > & objectLists,
-                                   const char * inputVarName,
-                                   Dependencies & nodes ) const
+/*static*/ bool Function::GetObjectListNodes( NodeGraph & nodeGraph,
+                                              const BFFToken * iter,
+                                              const Function * function,
+                                              const Array< AString > & objectLists,
+                                              const char * inputVarName,
+                                              Dependencies & nodes )
 {
     const AString * const  end = objectLists.End();
     for ( const AString * it = objectLists.Begin(); it != end; ++it )
@@ -589,16 +682,16 @@ bool Function::GetObjectListNodes( NodeGraph & nodeGraph,
         Node * node = nodeGraph.FindNode( objectList );
         if ( node == nullptr )
         {
-            Error::Error_1104_TargetNotDefined( iter, this, inputVarName, objectList );
+            Error::Error_1104_TargetNotDefined( iter, function, inputVarName, objectList );
             return false;
         }
         else if ( node->GetType() != Node::OBJECT_LIST_NODE )
         {
-            Error::Error_1102_UnexpectedType( iter, this, inputVarName, node->GetName(), node->GetType(), Node::OBJECT_LIST_NODE );
+            Error::Error_1102_UnexpectedType( iter, function, inputVarName, node->GetName(), node->GetType(), Node::OBJECT_LIST_NODE );
             return false;
         }
 
-        nodes.Append( Dependency( node ) );
+        nodes.EmplaceBack( node );
     }
     return true;
 }
@@ -606,14 +699,42 @@ bool Function::GetObjectListNodes( NodeGraph & nodeGraph,
 // GetNodeList
 //------------------------------------------------------------------------------
 /*static*/ bool Function::GetNodeList( NodeGraph & nodeGraph,
-                                       const BFFIterator & iter,
+                                       const BFFToken * iter,
+                                       const Function * function,
+                                       const char * propertyName,
+                                       const Array< AString > & nodeNames,
+                                       Dependencies & nodes,
+                                       bool allowCopyDirNodes,
+                                       bool allowUnityNodes,
+                                       bool allowRemoveDirNodes,
+                                       bool allowCompilerNodes )
+{
+    // Ok for nodeNames to be empty
+    for ( const AString & nodeName : nodeNames )
+    {
+        ASSERT( nodeName.IsEmpty() == false ); // MetaData should prevent this
+
+        if ( !GetNodeList( nodeGraph, iter, function, propertyName, nodeName, nodes, allowCopyDirNodes, allowUnityNodes, allowRemoveDirNodes, allowCompilerNodes ) )
+        {
+            return false; // GetNodeList will have emitted an error
+        }
+    }
+
+    return true;
+}
+
+// GetNodeList
+//------------------------------------------------------------------------------
+/*static*/ bool Function::GetNodeList( NodeGraph & nodeGraph,
+                                       const BFFToken * iter,
                                        const Function * function,
                                        const char * propertyName,
                                        const AString & nodeName,
                                        Dependencies & nodes,
                                        bool allowCopyDirNodes,
                                        bool allowUnityNodes,
-                                       bool allowRemoveDirNodes )
+                                       bool allowRemoveDirNodes,
+                                       bool allowCompilerNodes )
 {
     // get node
     Node * n = nodeGraph.FindNode( nodeName );
@@ -621,7 +742,7 @@ bool Function::GetObjectListNodes( NodeGraph & nodeGraph,
     {
         // not found - create a new file node
         n = nodeGraph.CreateFileNode( nodeName );
-        nodes.Append( Dependency( n ) );
+        nodes.EmplaceBack( n );
         return true;
     }
 
@@ -629,7 +750,7 @@ bool Function::GetObjectListNodes( NodeGraph & nodeGraph,
     if ( n->IsAFile() )
     {
         // found file - just use as is
-        nodes.Append( Dependency( n ) );
+        nodes.EmplaceBack( n );
         return true;
     }
 
@@ -637,7 +758,7 @@ bool Function::GetObjectListNodes( NodeGraph & nodeGraph,
     if ( n->GetType() == Node::OBJECT_LIST_NODE )
     {
         // use as-is
-        nodes.Append( Dependency( n ) );
+        nodes.EmplaceBack( n );
         return true;
     }
 
@@ -648,7 +769,7 @@ bool Function::GetObjectListNodes( NodeGraph & nodeGraph,
         if ( n->GetType() == Node::COPY_DIR_NODE )
         {
             // use as-is
-            nodes.Append( Dependency( n ) );
+            nodes.EmplaceBack( n );
             return true;
         }
     }
@@ -658,17 +779,27 @@ bool Function::GetObjectListNodes( NodeGraph & nodeGraph,
         if ( n->GetType() == Node::REMOVE_DIR_NODE )
         {
             // use as-is
-            nodes.Append( Dependency( n ) );
+            nodes.EmplaceBack( n );
             return true;
         }
     }
     if ( allowUnityNodes )
     {
-        // found - is it an ObjectList?
+        // found - is it a Unity?
         if ( n->GetType() == Node::UNITY_NODE )
         {
             // use as-is
-            nodes.Append( Dependency( n ) );
+            nodes.EmplaceBack( n );
+            return true;
+        }
+    }
+    if ( allowCompilerNodes )
+    {
+        // found - is it a Compiler?
+        if ( n->GetType() == Node::COMPILER_NODE )
+        {
+            // use as-is
+            nodes.EmplaceBack( n );
             return true;
         }
     }
@@ -683,7 +814,7 @@ bool Function::GetObjectListNodes( NodeGraph & nodeGraph,
             // TODO:C by passing as string we'll be looking up again for no reason
             const AString & subName = it->GetNode()->GetName();
 
-            if ( !GetNodeList( nodeGraph, iter, function, propertyName, subName, nodes, allowCopyDirNodes, allowUnityNodes, allowRemoveDirNodes ) )
+            if ( !GetNodeList( nodeGraph, iter, function, propertyName, subName, nodes, allowCopyDirNodes, allowUnityNodes, allowRemoveDirNodes, allowCompilerNodes ) )
             {
                 return false;
             }
@@ -698,7 +829,7 @@ bool Function::GetObjectListNodes( NodeGraph & nodeGraph,
 
 // GetStrings
 //------------------------------------------------------------------------------
-bool Function::GetStrings( const BFFIterator & iter, Array< AString > & strings, const char * name, bool required ) const
+bool Function::GetStrings( const BFFToken * iter, Array< AString > & strings, const char * name, bool required ) const
 {
     const BFFVariable * var;
     if ( !GetStringOrArrayOfStrings( iter, var, name, required ) )
@@ -727,113 +858,18 @@ bool Function::GetStrings( const BFFIterator & iter, Array< AString > & strings,
     return true;
 }
 
-// GetFolderPaths
-//------------------------------------------------------------------------------
-bool Function::GetFolderPaths(const BFFIterator & iter, Array< AString > & paths, const char * name, bool required) const
-{
-    if ( !GetStrings(iter, paths, name, required ) )
-    {
-        return false; // GetStrings will have emitted an error
-    }
-    CleanFolderPaths( paths );
-    return true;
-}
-
-// GetFileNode
-//------------------------------------------------------------------------------
-bool Function::GetFileNode( NodeGraph & nodeGraph, const BFFIterator & iter, Node * & fileNode, const char * name, bool required ) const
-{
-    // get the string containing the node name
-    AStackString<> fileNodeName;
-    if ( GetString( iter, fileNodeName, name, required ) == false )
-    {
-        return false;
-    }
-
-    // handle not-present
-    if ( fileNodeName.IsEmpty() )
-    {
-        ASSERT( required == false ); // GetString should have managed required string
-        fileNode = nullptr;
-        return true;
-    }
-
-    // get/create the FileNode
-    Node * n = nodeGraph.FindNode( fileNodeName );
-    if ( n == nullptr )
-    {
-        n = nodeGraph.CreateFileNode( fileNodeName );
-    }
-    else if ( n->IsAFile() == false )
-    {
-        Error::Error_1103_NotAFile( iter, this, name, n->GetName(), n->GetType() );
-        return false;
-    }
-    fileNode = n;
-    return true;
-}
-
-// CleanFolderPaths
-//------------------------------------------------------------------------------
-/*static*/ void Function::CleanFolderPaths( Array< AString > & folders )
-{
-    AStackString< 512 > tmp;
-
-    AString * const end = folders.End();
-    for ( AString * it = folders.Begin(); it != end; ++it )
-    {
-        // make full path, clean slashes etc
-        NodeGraph::CleanPath( *it, tmp );
-
-        // ensure path is slash-terminated
-        PathUtils::EnsureTrailingSlash( tmp );
-
-        // replace original
-        *it = tmp;
-    }
-}
-
-//------------------------------------------------------------------------------
-/*static*/ void Function::CleanFilePaths( Array< AString > & files )
-{
-    AStackString< 512 > tmp;
-
-    AString * const end = files.End();
-    for ( AString * it = files.Begin(); it != end; ++it )
-    {
-        // make full path, clean slashes etc
-        NodeGraph::CleanPath( *it, tmp );
-
-        // replace original
-        *it = tmp;
-    }
-}
-
-// CleanFileNames
-//------------------------------------------------------------------------------
-void Function::CleanFileNames( Array< AString > & fileNames ) const
-{
-    // cleanup slashes (keep path relative)
-    AString * const end = fileNames.End();
-    for ( AString * it = fileNames.Begin(); it != end; ++it )
-    {
-        // normalize slashes
-        PathUtils::FixupFilePath( *it );
-    }
-}
-
 // ProcessAlias
 //------------------------------------------------------------------------------
-bool Function::ProcessAlias( NodeGraph & nodeGraph, const BFFIterator & iter, Node * nodeToAlias ) const
+bool Function::ProcessAlias( NodeGraph & nodeGraph, const BFFToken * iter, Node * nodeToAlias ) const
 {
     Dependencies nodesToAlias( 1, false );
-    nodesToAlias.Append( Dependency( nodeToAlias ) );
+    nodesToAlias.EmplaceBack( nodeToAlias );
     return ProcessAlias( nodeGraph, iter, nodesToAlias );
 }
 
 // ProcessAlias
 //------------------------------------------------------------------------------
-bool Function::ProcessAlias( NodeGraph & nodeGraph, const BFFIterator & iter, Dependencies & nodesToAlias ) const
+bool Function::ProcessAlias( NodeGraph & nodeGraph, const BFFToken * iter, Dependencies & nodesToAlias ) const
 {
     if ( m_AliasForFunction.IsEmpty() )
     {
@@ -859,11 +895,14 @@ bool Function::ProcessAlias( NodeGraph & nodeGraph, const BFFIterator & iter, De
 
 // GetNameForNode
 //------------------------------------------------------------------------------
-bool Function::GetNameForNode( NodeGraph & nodeGraph, const BFFIterator & iter, const ReflectionInfo * ri, AString & name ) const
+bool Function::GetNameForNode( NodeGraph & nodeGraph, const BFFToken * iter, const ReflectionInfo * ri, AString & name ) const
 {
     // get object MetaData
     const Meta_Name * nameMD = ri->HasMetaData< Meta_Name >();
-    ASSERT( nameMD ); // should not call this on types without this MetaData
+    if ( nameMD == nullptr )
+    {
+        return true; // No MetaName, but this is not an error
+    }
 
     // Format "Name" as ".Name" - TODO:C Would be good to eliminate this string copy
     AStackString<> propertyName( "." );
@@ -878,7 +917,7 @@ bool Function::GetNameForNode( NodeGraph & nodeGraph, const BFFIterator & iter, 
     }
     if ( variable->IsString() )
     {
-        Array< AString > strings;
+        StackArray<AString> strings;
         if ( !PopulateStringHelper( nodeGraph, iter, nullptr, ri->HasMetaData< Meta_File >(), nullptr, variable, strings ) )
         {
             return false; // PopulateStringHelper will have emitted an error
@@ -914,9 +953,16 @@ bool Function::GetNameForNode( NodeGraph & nodeGraph, const BFFIterator & iter, 
 
 // PopulateProperties
 //------------------------------------------------------------------------------
-bool Function::PopulateProperties( NodeGraph & nodeGraph, const BFFIterator & iter, Node * node ) const
+bool Function::PopulateProperties( NodeGraph & nodeGraph, const BFFToken * iter, Node * node ) const
 {
     const ReflectionInfo * ri = node->GetReflectionInfoV();
+    return PopulateProperties( nodeGraph, iter, node, ri );
+}
+
+// PopulateProperties
+//------------------------------------------------------------------------------
+bool Function::PopulateProperties( NodeGraph & nodeGraph, const BFFToken * iter, void * base, const ReflectionInfo * ri ) const
+{
     do
     {
         const ReflectionIter end = ri->End();
@@ -937,7 +983,7 @@ bool Function::PopulateProperties( NodeGraph & nodeGraph, const BFFIterator & it
             // Find the value for this property from the BFF
             const BFFVariable * v = BFFStackFrame::GetVar( propertyName );
 
-            if ( !PopulateProperty( nodeGraph, iter, node, property, v ) )
+            if ( !PopulateProperty( nodeGraph, iter, base, property, v ) )
             {
                 return false; // PopulateProperty will have emitted an error
             }
@@ -954,11 +1000,20 @@ bool Function::PopulateProperties( NodeGraph & nodeGraph, const BFFIterator & it
 // PopulateProperty
 //------------------------------------------------------------------------------
 bool Function::PopulateProperty( NodeGraph & nodeGraph,
-                                 const BFFIterator & iter,
+                                 const BFFToken * iter,
                                  void * base,
                                  const ReflectedProperty & property,
                                  const BFFVariable * variable ) const
 {
+    // Handle MetaEmbedMembers
+    if ( property.HasMetaData< Meta_EmbedMembers >() )
+    {
+        ASSERT( property.GetType() == PropertyType::PT_STRUCT );
+        ASSERT( property.IsArray() == false );
+        const ReflectedPropertyStruct & rps = static_cast< const ReflectedPropertyStruct & >( property );
+        return PopulateProperties( nodeGraph, iter, (Struct *)rps.GetStructBase( base ), rps.GetStructReflectionInfo() );
+    }
+
     // Handle missing but required
     if ( variable == nullptr )
     {
@@ -1005,6 +1060,7 @@ bool Function::PopulateProperty( NodeGraph & nodeGraph,
             {
                 return PopulateArrayOfStructs( nodeGraph, iter, base, property, variable );
             }
+            break;
         }
         default:
         {
@@ -1017,7 +1073,7 @@ bool Function::PopulateProperty( NodeGraph & nodeGraph,
 
 // PopulateStringHelper
 //------------------------------------------------------------------------------
-bool Function::PopulateStringHelper( NodeGraph & nodeGraph, const BFFIterator & iter, const Meta_Path * pathMD, const Meta_File * fileMD, const Meta_AllowNonFile * allowNonFileMD, const BFFVariable * variable, Array< AString > & outStrings ) const
+bool Function::PopulateStringHelper( NodeGraph & nodeGraph, const BFFToken * iter, const Meta_Path * pathMD, const Meta_File * fileMD, const Meta_AllowNonFile * allowNonFileMD, const BFFVariable * variable, Array< AString > & outStrings ) const
 {
     if ( variable->IsArrayOfStrings() )
     {
@@ -1047,7 +1103,7 @@ bool Function::PopulateStringHelper( NodeGraph & nodeGraph, const BFFIterator & 
 // PopulateStringHelper
 //------------------------------------------------------------------------------
 bool Function::PopulateStringHelper( NodeGraph & nodeGraph,
-                                     const BFFIterator & iter,
+                                     const BFFToken * iter,
                                      const Meta_Path * pathMD,
                                      const Meta_File * fileMD,
                                      const Meta_AllowNonFile * allowNonFileMD,
@@ -1120,7 +1176,7 @@ bool Function::PopulateStringHelper( NodeGraph & nodeGraph,
 
 // PopulatePathAndFileHelper
 //------------------------------------------------------------------------------
-bool Function::PopulatePathAndFileHelper( const BFFIterator & iter,
+bool Function::PopulatePathAndFileHelper( const BFFToken * iter,
                                           const Meta_Path * pathMD,
                                           const Meta_File * fileMD,
                                           const AString & variableName,
@@ -1173,9 +1229,9 @@ bool Function::PopulatePathAndFileHelper( const BFFIterator & iter,
 
 // PopulateArrayOfStrings
 //------------------------------------------------------------------------------
-bool Function::PopulateArrayOfStrings( NodeGraph & nodeGraph, const BFFIterator & iter, void * base, const ReflectedProperty & property, const BFFVariable * variable, bool required ) const
+bool Function::PopulateArrayOfStrings( NodeGraph & nodeGraph, const BFFToken * iter, void * base, const ReflectedProperty & property, const BFFVariable * variable, bool required ) const
 {
-    Array< AString > strings;
+    StackArray<AString> strings;
     if ( !PopulateStringHelper( nodeGraph, iter, property.HasMetaData< Meta_Path >(), property.HasMetaData< Meta_File >(), property.HasMetaData< Meta_AllowNonFile >(), variable, strings ) )
     {
         return false; // PopulateStringHelper will have emitted an error
@@ -1204,9 +1260,9 @@ bool Function::PopulateArrayOfStrings( NodeGraph & nodeGraph, const BFFIterator 
 
 // PopulateString
 //------------------------------------------------------------------------------
-bool Function::PopulateString( NodeGraph & nodeGraph, const BFFIterator & iter, void * base, const ReflectedProperty & property, const BFFVariable * variable, bool required ) const
+bool Function::PopulateString( NodeGraph & nodeGraph, const BFFToken * iter, void * base, const ReflectedProperty & property, const BFFVariable * variable, bool required ) const
 {
-    Array< AString > strings;
+    StackArray<AString> strings;
     if ( !PopulateStringHelper( nodeGraph, iter, property.HasMetaData< Meta_Path >(), property.HasMetaData< Meta_File >(), property.HasMetaData< Meta_AllowNonFile >(), variable, strings ) )
     {
         return false; // PopulateStringHelper will have emitted an error
@@ -1246,7 +1302,7 @@ bool Function::PopulateString( NodeGraph & nodeGraph, const BFFIterator & iter, 
 
 // PopulateBool
 //------------------------------------------------------------------------------
-bool Function::PopulateBool( const BFFIterator & iter, void * base, const ReflectedProperty & property, const BFFVariable * variable ) const
+bool Function::PopulateBool( const BFFToken * iter, void * base, const ReflectedProperty & property, const BFFVariable * variable ) const
 {
     if ( variable->IsBool() )
     {
@@ -1261,7 +1317,7 @@ bool Function::PopulateBool( const BFFIterator & iter, void * base, const Reflec
 
 // PopulateInt32
 //------------------------------------------------------------------------------
-bool Function::PopulateInt32( const BFFIterator & iter, void * base, const ReflectedProperty & property, const BFFVariable * variable ) const
+bool Function::PopulateInt32( const BFFToken * iter, void * base, const ReflectedProperty & property, const BFFVariable * variable ) const
 {
     if ( variable->IsInt() )
     {
@@ -1289,7 +1345,7 @@ bool Function::PopulateInt32( const BFFIterator & iter, void * base, const Refle
 
 // PopulateUInt32
 //------------------------------------------------------------------------------
-bool Function::PopulateUInt32( const BFFIterator & iter, void * base, const ReflectedProperty & property, const BFFVariable * variable ) const
+bool Function::PopulateUInt32( const BFFToken * iter, void * base, const ReflectedProperty & property, const BFFVariable * variable ) const
 {
     if ( variable->IsInt() )
     {
@@ -1318,7 +1374,7 @@ bool Function::PopulateUInt32( const BFFIterator & iter, void * base, const Refl
 // PopulateArrayOfStructs
 //------------------------------------------------------------------------------
 bool Function::PopulateArrayOfStructs( NodeGraph & nodeGraph,
-                                       const BFFIterator & iter,
+                                       const BFFToken * iter,
                                        void * base,
                                        const ReflectedProperty & property,
                                        const BFFVariable * variable ) const
@@ -1326,7 +1382,6 @@ bool Function::PopulateArrayOfStructs( NodeGraph & nodeGraph,
     // Get the destionation
     const ReflectedPropertyStruct & dstStructs = static_cast< const ReflectedPropertyStruct & >( property );
     ASSERT( dstStructs.IsArray() );
-    const ReflectionInfo * ri = dstStructs.GetStructReflectionInfo();
 
     // Array to Array
     if ( variable->IsArrayOfStructs() )
@@ -1342,20 +1397,12 @@ bool Function::PopulateArrayOfStructs( NodeGraph & nodeGraph,
             // Calculate the base for this struct in the array
             void * structBase = dstStructs.GetStructInArray( base, index );
 
-            // Try to populate all the properties for this struct
-            for ( auto it = ri->Begin(); it != ri->End(); ++it )
+            const ReflectionInfo * ri = dstStructs.GetStructReflectionInfo();
+            if ( !PopulateArrayOfStructsElement( nodeGraph, iter, structBase, ri, s ) )
             {
-                AStackString<> propertyName( "." ); // TODO:C Eliminate copy
-                propertyName += (*it).GetName();
-
-                // Try to find property in BFF
-                const BFFVariable ** found = BFFVariable::GetMemberByName( propertyName, s->GetStructMembers() );
-                const BFFVariable * var = found ? *found : nullptr;
-                if ( !PopulateProperty( nodeGraph, iter, structBase, *it, var ) )
-                {
-                    return false; // PopulateProperty will have emitted an error
-                }
+                return false; // PopulateArrayOfStructsElement will have emitted an error
             }
+
             ++index;
         }
         return true;
@@ -1369,25 +1416,69 @@ bool Function::PopulateArrayOfStructs( NodeGraph & nodeGraph,
         // Calculate the base for this struct in the array
         void * structBase = dstStructs.GetStructInArray( base, 0 );
 
-        // Try to populate all the properties for this struct
-        for ( auto it = ri->Begin(); it != ri->End(); ++it )
-        {
-            AStackString<> propertyName( "." ); // TODO:C Eliminate copy
-            propertyName += (*it).GetName();
-
-            // Try to find property in BFF
-            const BFFVariable ** found = BFFVariable::GetMemberByName( propertyName, variable->GetStructMembers() );
-            const BFFVariable * var = found ? *found : nullptr;
-            if ( !PopulateProperty( nodeGraph, iter, structBase, *it, var ) )
-            {
-                return false; // PopulateProperty will have emitted an error
-            }
-        }
-        return true;
+        const ReflectionInfo * ri = dstStructs.GetStructReflectionInfo();
+        return PopulateArrayOfStructsElement( nodeGraph, iter, structBase, ri, variable ); // Will emit error if needed
     }
 
     Error::Error_1050_PropertyMustBeOfType( iter, this, variable->GetName().Get(), variable->GetType(), BFFVariable::VAR_STRUCT, BFFVariable::VAR_ARRAY_OF_STRUCTS );
     return false;
+}
+
+// PopulateArrayOfStructsElement
+//------------------------------------------------------------------------------
+bool Function::PopulateArrayOfStructsElement( NodeGraph & nodeGraph,
+                                              const BFFToken * iter,
+                                              void * structBase,
+                                              const ReflectionInfo * structRI,
+                                              const BFFVariable * srcVariable ) const
+{
+    ASSERT( structRI ); // Must be at least one level of reflection
+    ASSERT( srcVariable->IsStruct() );
+
+    do
+    {
+        // Try to populate all the properties for this struct
+        for ( auto it = structRI->Begin(); it != structRI->End(); ++it )
+        {
+            const ReflectedProperty & property = *it;
+
+            // Don't populate hidden properties
+            if ( property.HasMetaData< Meta_Hidden >() )
+            {
+                continue;
+            }
+
+            AStackString<> propertyName( "." ); // TODO:C Eliminate copy
+            propertyName += property.GetName();
+
+            // Try to find property in BFF
+            const BFFVariable ** found = BFFVariable::GetMemberByName( propertyName, srcVariable->GetStructMembers() );
+            const BFFVariable * var = nullptr;
+            if ( found )
+            {
+                // Use variable if found
+                var = *found;
+            }
+            else
+            {
+                // If not found, check for inheritence from containing frame
+                if ( property.HasMetaData<Meta_InheritFromOwner>() )
+                {
+                    var = BFFStackFrame::GetVar( propertyName );
+                }
+            }
+            if ( !PopulateProperty( nodeGraph, iter, structBase, property, var ) )
+            {
+                return false; // PopulateProperty will have emitted an error
+            }
+        }
+
+        // Traverse into parent class (if there is one)
+        structRI = structRI->GetSuperClass();
+    }
+    while ( structRI );
+
+    return true;
 }
 
 //------------------------------------------------------------------------------

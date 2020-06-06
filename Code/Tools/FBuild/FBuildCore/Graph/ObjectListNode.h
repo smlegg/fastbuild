@@ -10,7 +10,6 @@
 // Forward Declarations
 //------------------------------------------------------------------------------
 class Args;
-class BFFIterator;
 class CompilerNode;
 class Function;
 class NodeGraph;
@@ -23,15 +22,12 @@ class ObjectListNode : public Node
     REFLECT_NODE_DECLARE( ObjectListNode )
 public:
     ObjectListNode();
-    bool Initialize( NodeGraph & nodeGraph, const BFFIterator & iter, const Function * function );
-    virtual ~ObjectListNode();
+    virtual bool Initialize( NodeGraph & nodeGraph, const BFFToken * iter, const Function * function ) override;
+    virtual ~ObjectListNode() override;
 
     static inline Node::Type GetTypeS() { return Node::OBJECT_LIST_NODE; }
 
     virtual bool IsAFile() const override;
-
-    static Node * Load( NodeGraph & nodeGraph, IOStream & stream );
-    virtual void Save( IOStream & stream ) const override;
 
     const char * GetObjExtension() const;
 
@@ -42,6 +38,10 @@ public:
     CompilerNode * GetPreprocessor() const;
 
     inline const AString & GetCompilerOptions() const { return m_CompilerOptions; }
+    void GetObjectFileName( const AString & fileName, const AString & baseDir, AString & objFile );
+
+    void EnumerateInputFiles( void (*callback)( const AString & inputFile, const AString & baseDir, void * userData ), void * userData ) const;
+
 protected:
     friend class FunctionObjectList;
 
@@ -52,7 +52,7 @@ protected:
     // internal helpers
     bool CreateDynamicObjectNode( NodeGraph & nodeGraph, Node * inputFile, const AString & baseDir, bool isUnityNode = false, bool isIsolatedFromUnityNode = false );
     ObjectNode * CreateObjectNode( NodeGraph & nodeGraph,
-                                   const BFFIterator & iter,
+                                   const BFFToken * iter,
                                    const Function * function,
                                    const uint32_t flags,
                                    const uint32_t preprocessorFlags,
@@ -63,6 +63,7 @@ protected:
                                    const AString & objectName,
                                    const AString & objectInput,
                                    const AString & pchObjectName );
+    ObjectNode * GetPrecompiledHeader() const;
 
     // Exposed Properties
     AString             m_Compiler;
@@ -80,7 +81,9 @@ protected:
     Array< AString >    m_CompilerInputUnity;
     AString             m_CompilerInputFilesRoot;
     Array< AString >    m_CompilerForceUsing;
+    bool                m_CompilerInputAllowNoFiles         = false;
     bool                m_CompilerInputPathRecurse          = true;
+    bool                m_CompilerOutputKeepBaseExtension   = false;
     bool                m_DeoptimizeWritableFiles           = false;
     bool                m_DeoptimizeWritableFilesWithToken  = false;
     bool                m_AllowDistribution                 = true;
@@ -93,7 +96,7 @@ protected:
     Array< AString >    m_PreBuildDependencyNames;
 
     // Internal State
-    ObjectNode *        m_PrecompiledHeader                 = nullptr;
+    bool                m_UsingPrecompiledHeader            = false;
     AString             m_ExtraPDBPath;
     AString             m_ExtraASMPath;
     uint32_t            m_ObjectListInputStartIndex         = 0;

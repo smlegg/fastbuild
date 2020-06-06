@@ -1,14 +1,29 @@
 <!DOCTYPE html>
 <link href="../style.css" rel="stylesheet" type="text/css">
-<script type="text/javascript" src="../common.js"></script>
 
-<html>
+<html lang="en-US">
 <head>
+<meta charset="utf-8">
 <link rel="shortcut icon" href="../../favicon.ico">
 <title>FASTBuild - Function Reference - Test</title>
 </head>
 <body>
-  <script>generateHeaderParent()</script>
+	<div class='outer'>
+        <div>
+            <div class='logobanner'>
+                <a href='../home.html'><img src='../img/logo.png' style='position:relative;'/></a>
+	            <div class='contact'><a href='../contact.html' class='othernav'>Contact</a> &nbsp; | &nbsp; <a href='../license.html' class='othernav'>License</a></div>
+	        </div>
+	    </div>
+	    <div id='main'>
+	        <div class='navbar'>
+	            <a href='../home.html' class='lnavbutton'>Home</a><div class='navbuttonbreak'><div class='navbuttonbreakinner'></div></div>
+	            <a href='../features.html' class='navbutton'>Features</a><div class='navbuttonbreak'><div class='navbuttonbreakinner'></div></div>
+	            <a href='../status.html' class='navbutton'>Status</a><div class='navbuttonbreak'><div class='navbuttonbreakinner'></div></div>
+	            <a href='../documentation.html' class='navbutton'>Documentation</a><div class='navbuttongap'></div>
+	            <a href='../download.html' class='rnavbutton'><b>Download</b></a>
+	        </div>
+	        <div class='inner'>
 
 <h1>Test</h1>
     <div id='test' class='newsitemheader'>
@@ -20,16 +35,31 @@ Defines the execution of an executable as a test.</p>
 <div class='code'>Test( alias )      // (optional) Alias
 {
   // Options
-  .TestExecutable       // The executable file to run that will execute the tests
-  .TestOutput           // Output file for captured test output
-  .TestArguments        // (optional) Arguments to pass to test executable
-  .TestWorkingDir       // (optional) Working dir for test execution
-  .TestTimeOut          // (optional) TimeOut (in seconds) for test (default: 0, no timeout)
-  .TestAlwaysShowOutput // (optional) Show output of tests even when they don't fail (default: false)
-  
+  .TestExecutable          // The executable file to run that will execute the tests
+  .TestOutput              // Output file for captured test output
+
+  // Additional inputs
+  .TestInput               // (optional) Input file(s) to pass to executable
+  .TestInputPath           // (optional) Path to find files in
+  .TestInputPattern        // (optional) Pattern(s) to use when finding files (default *.*)
+  .TestInputPathRecurse    // (optional) Recurse into dirs when finding files (default true)
+  .TestInputExcludePath    // (optional) Path(s) to exclude
+  .TestInputExcludedFiles  // (optional) File(s) to exclude from compilation (partial, root-relative of full path)
+  .TestInputExcludePattern // (optional) Pattern(s) to exclude
+
+  // Other
+  .TestArguments           // (optional) Arguments to pass to test executable
+  .TestWorkingDir          // (optional) Working dir for test execution
+  .TestTimeOut             // (optional) TimeOut (in seconds) for test (default: 0, no timeout)
+  .TestAlwaysShowOutput    // (optional) Show output of tests even when they don't fail (default: false)
+
    // Additional options
-  .PreBuildDependencies     // (optional) Force targets to be built before this Test (Rarely needed,
-                            // but useful when Test relies on externally generated files). 
+  .PreBuildDependencies    // (optional) Force targets to be built before this Test (Rarely needed,
+                           // but useful when Test relies on externally generated files).
+
+  .Environment             // (optional) Environment variables to use for local build
+                           // If set, linker uses this environment
+                           // If not set, linker uses .Environment from your Settings node
 }
 </div>
     </div>
@@ -67,16 +97,22 @@ Defines the execution of an executable as a test.</p>
       <p><b>.TestAlwaysShowOutput</b> - Boolean - (Optional)</p>
       <p>The output of a test is normally shown only when the test fails. This option specifies that the output should always be shown.</p>
     </div>
-    
+
     <div id='copy' class='newsitemheader'>
       Additional Options
-    </div>	
+    </div>
     <div class='newsitembody'>
       <p><b>.PreBuildDependencies</b> - String/ArrayOfStrings - (Optional)</p>
-	  <p>One or more nodes which must be built before this test is executed.</p>	  
-	  <p>The .PreBuildDependencies option ensures the specified targets are up-to-date before the 
+	  <p>One or more nodes which must be built before this test is executed.</p>
+	  <p>The .PreBuildDependencies option ensures the specified targets are up-to-date before the
 	  Test() is executed.</p>
-    </div>	
+
+      <hr>
+
+      <p><b>.Environment</b> - String or ArrayOfStrings - (Optional)</p>
+      <p>When set, overrides the environment for running a Test.</p>
+      <p>This allows you to have a different environment per Test if needed.</p>
+    </div>
 
     <div class='newsitemheader'>
       Simple Example
@@ -86,12 +122,12 @@ Defines the execution of an executable as a test.</p>
 <div class='code'>
 Test( 'MyCoreTests-Run' )
 {
-  .TestExecutable = 'MyCoreTests-Exe' // Must be previously defined with Executable()
+  .TestExecutable = 'MyCoreTests-Exe' // Must be previously defined, usually with Executable()
   .TestOutput = 'Tests/MyCoreTests_Output.txt'
 }
 </div>
     </div>
 
-  <script>generateFooter()</script>
+    </div><div class='footer'>&copy; 2012-2020 Franta Fulin</div></div></div>
 </body>
 </html>

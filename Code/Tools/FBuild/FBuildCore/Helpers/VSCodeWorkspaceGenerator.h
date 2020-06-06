@@ -9,21 +9,7 @@
 // Forward Declarations
 //------------------------------------------------------------------------------
 class VSCodeProjectNode;
-
-// VSCodeFolder
-//-----------------------------------------------------------------------------
-class VSCodeWorkspaceFolder
-{
-public:
-	VSCodeWorkspaceFolder();
-	~VSCodeWorkspaceFolder();
-
-	AString m_Path;
-	AString m_Name;
-
-	static bool Load( IOStream & stream, Array< VSCodeWorkspaceFolder > & folders );
-	static void Save( IOStream & stream, const Array< VSCodeWorkspaceFolder > & folders );
-};
+struct VSCodeWorkspaceFolder;
 
 // VSCodeProjectGenerator
 //-----------------------------------------------------------------------------

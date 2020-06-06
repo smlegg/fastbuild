@@ -15,14 +15,29 @@
 
 // Forward Declarations
 //------------------------------------------------------------------------------
-class VCXProjectNode;
+class VSProjectBaseNode;
+
+// SolutionConfigBase
+//------------------------------------------------------------------------------
+class SolutionConfigBase : public Struct
+{
+    REFLECT_STRUCT_DECLARE( SolutionConfigBase )
+public:
+    Array< AString > m_SolutionBuildProjects;
+    Array< AString > m_SolutionDeployProjects;
+};
 
 // SolutionConfig
 //------------------------------------------------------------------------------
-class SolutionConfig : public Struct
+class SolutionConfig : public SolutionConfigBase
 {
     REFLECT_STRUCT_DECLARE( SolutionConfig )
 public:
+    SolutionConfig() = default;
+    explicit SolutionConfig( const SolutionConfigBase & baseConfig )
+        : SolutionConfigBase( baseConfig )
+    {}
+
     AString m_SolutionPlatform;
     AString m_SolutionConfig;
     AString m_Platform;
@@ -43,7 +58,8 @@ class SolutionFolder : public Struct
     REFLECT_STRUCT_DECLARE( SolutionFolder )
 public:
     AString             m_Path;
-    Array< AString >    m_Projects;    
+    Array< AString >    m_Projects;
+    Array< AString >    m_Items;
 };
 
 // SolutionDependency
@@ -52,8 +68,8 @@ class SolutionDependency : public Struct
 {
     REFLECT_STRUCT_DECLARE( SolutionDependency )
 public:
-    Array< AString >    m_Projects;    
-    Array< AString >    m_Dependencies;    
+    Array< AString >    m_Projects;
+    Array< AString >    m_Dependencies;
 };
 
 // SLNNode
@@ -63,39 +79,37 @@ class SLNNode : public FileNode
     REFLECT_NODE_DECLARE( SLNNode )
 public:
     SLNNode();
-    bool Initialize( NodeGraph & nodeGraph, const BFFIterator & iter, const Function * function );
-    virtual ~SLNNode();
+    virtual bool Initialize( NodeGraph & nodeGraph, const BFFToken * iter, const Function * function ) override;
+    virtual ~SLNNode() override;
 
     static inline Node::Type GetTypeS() { return Node::SLN_NODE; }
 
-    static Node * Load( NodeGraph & nodeGraph, IOStream & stream );
-    virtual void Save( IOStream & stream ) const override;
 private:
     virtual BuildResult DoBuild( Job * job ) override;
 
     bool Save( const AString & content, const AString & fileName ) const;
 
-    bool                    GatherProject( NodeGraph & nodeGraph, 
-                                           const Function * function, 
-                                           const BFFIterator & iter,
+    bool                    GatherProject( NodeGraph & nodeGraph,
+                                           const Function * function,
+                                           const BFFToken * iter,
                                            const char * propertyName,
                                            const AString & projectName,
-                                           Array< VCXProjectNode * > & inOutProjects ) const;
-    bool                    GatherProjects( NodeGraph & nodeGraph, 
-                                            const Function * function, 
-                                            const BFFIterator & iter,
+                                           Array< VSProjectBaseNode * > & inOutProjects ) const;
+    bool                    GatherProjects( NodeGraph & nodeGraph,
+                                            const Function * function,
+                                            const BFFToken * iter,
                                             const char * propertyName,
                                             const Array< AString > & projectNames,
-                                            Array< VCXProjectNode * > & inOutProjects ) const;
+                                            Array< VSProjectBaseNode * > & inOutProjects ) const;
 
     // Reflected
     Array< AString >            m_SolutionProjects;
-    Array< AString >            m_SolutionBuildProjects;
     AString                     m_SolutionVisualStudioVersion;
     AString                     m_SolutionMinimumVisualStudioVersion;
     Array< SolutionConfig >     m_SolutionConfigs;
     Array< SolutionFolder >     m_SolutionFolders;
     Array< SolutionDependency > m_SolutionDependencies;
+    SolutionConfigBase          m_BaseSolutionConfig;
 };
 
 //------------------------------------------------------------------------------

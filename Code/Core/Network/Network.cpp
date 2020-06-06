@@ -3,20 +3,17 @@
 
 // Includes
 //------------------------------------------------------------------------------
-#include "Core/PrecompiledHeader.h"
-
 #include "Network.h"
 
 // Core
-#include "Core/Strings/AString.h"
 #include "Core/Network/NetworkStartupHelper.h"
 #include "Core/Process/Thread.h"
 #include "Core/Profile/Profile.h"
+#include "Core/Strings/AString.h"
 
 // system
 #if defined( __WINDOWS__ )
-    #include <Winsock2.h>
-    #include <ws2tcpip.h>
+    #include "Core/Env/WindowsHeader.h"
 #endif
 #if defined( __LINUX__ ) || defined( __APPLE__ )
     #include <arpa/inet.h>
@@ -40,8 +37,8 @@
     }
     else
     {
-        ASSERT( false && "This should never fail" );
         hostName = "Unknown";
+        ASSERT( false && "This should never fail" );
     }
 }
 
@@ -51,8 +48,17 @@
 {
     PROFILE_FUNCTION
 
+    // Fast path for "localhost". Although we have a fast path for detecting ip4
+    // format adresses, it can still take several ms to call
+    if ( hostName == "127.0.0.1" )
+    {
+        return 0x0100007f;
+    }
+
     // see if string it already in ip4 format
-    uint32_t ip = inet_addr( hostName.Get() );
+    PRAGMA_DISABLE_PUSH_MSVC( 4996 ) // Deprecated...
+    uint32_t ip = inet_addr( hostName.Get() ); // TODO:C Consider using inet_pton()
+    PRAGMA_DISABLE_POP_MSVC // 4996
     if ( ip != INADDR_NONE )
     {
         return ip;
@@ -76,7 +82,7 @@
     int returnCode( 0 );
     uint32_t remainingTimeMS( timeoutMS );
     const uint32_t sleepInterval( 100 ); // Check exit condition periodically - TODO:C would be better to use an event
-    for (;;)
+    for ( ;; )
     {
         returnCode = Thread::WaitForThread( handle, sleepInterval, timedOut );
 
@@ -101,6 +107,10 @@
 
         break; // success!
     }
+    if ( timedOut )
+    {
+        Thread::DetachThread( handle );
+    }
     Thread::CloseHandle( handle );
 
     // handle race where timeout occurred before thread marked data as
@@ -116,7 +126,7 @@
     }
 
     // return result of resolution (could also have failed)
-    return returnCode;
+    return (uint32_t)returnCode;
 }
 
 // NameResolutionThreadFunc

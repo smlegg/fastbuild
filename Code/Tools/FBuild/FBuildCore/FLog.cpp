@@ -3,14 +3,13 @@
 
 // Includes
 //------------------------------------------------------------------------------
-#include "Tools/FBuild/FBuildCore/PrecompiledHeader.h"
-
 #include "FLog.h"
 
 #include "Tools/FBuild/FBuildCore/WorkerPool/WorkerThread.h"
 #include "Tools/FBuild/FBuildCore/FBuild.h"
 
 #include "Core/Env/Types.h"
+#include "Core/FileIO/FileIO.h"
 #include "Core/FileIO/FileStream.h"
 #include "Core/Process/Mutex.h"
 #include "Core/Process/Process.h"
@@ -22,7 +21,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #if defined( __WINDOWS__ ) && defined( DEBUG )
-    #include <windows.h> // for OutputDebugStringA
+    #include "Core/Env/WindowsHeader.h" // for OutputDebugStringA
 #endif
 #if defined( __LINUX__ ) || defined( __APPLE__ )
     // TODO:LINUX TODO:MAC Clean up this _itoa_s mess
@@ -36,8 +35,8 @@
 
 // Static Data
 //------------------------------------------------------------------------------
-/*static*/ bool FLog::s_ShowInfo = false;
-/*static*/ bool FLog::s_ShowBuildCommands = true;
+/*static*/ bool FLog::s_ShowVerbose = false;
+/*static*/ bool FLog::s_ShowBuildReason = false;
 /*static*/ bool FLog::s_ShowErrors = true;
 /*static*/ bool FLog::s_ShowProgress = false;
 /*static*/ bool FLog::s_MonitorEnabled = false;
@@ -53,7 +52,7 @@ static FileStream * g_MonitorFileStream = nullptr;
 
 // Info
 //------------------------------------------------------------------------------
-/*static*/ void FLog::Info( const char * formatString, ... )
+/*static*/ void FLog::Verbose( MSVC_SAL_PRINTF const char * formatString, ... )
 {
     AStackString< 8192 > buffer;
 
@@ -62,12 +61,12 @@ static FileStream * g_MonitorFileStream = nullptr;
     buffer.VFormat( formatString, args );
     va_end( args );
 
-    Output( "Info:", buffer.Get() );
+    OutputInternal( "Info:", buffer.Get() );
 }
 
-// Build
+// Output
 //------------------------------------------------------------------------------
-/*static*/ void FLog::Build( const char * formatString, ... )
+/*static*/ void FLog::Output( MSVC_SAL_PRINTF const char * formatString, ... )
 {
     AStackString< 8192 > buffer;
 
@@ -75,13 +74,18 @@ static FileStream * g_MonitorFileStream = nullptr;
     va_start(args, formatString);
     buffer.VFormat( formatString, args );
     va_end( args );
+
+    if ( buffer.IsEmpty() ) // Ignore empty messages for caller convenience
+    {
+        return;
+    }
 
     Tracing::Output( buffer.Get() );
 }
 
 // Monitor
 //------------------------------------------------------------------------------
-/*static*/ void FLog::Monitor( const char * formatString, ... )
+/*static*/ void FLog::Monitor( MSVC_SAL_PRINTF const char * formatString, ... )
 {
     // Is monitoring enabled?
     if ( g_MonitorFileStream == nullptr )
@@ -104,16 +108,21 @@ static FileStream * g_MonitorFileStream = nullptr;
     g_MonitorFileStream->WriteBuffer( finalBuffer.Get(), finalBuffer.GetLength() );
 }
 
-// BuildDirect
+// Output
 //------------------------------------------------------------------------------
-/*static*/ void FLog::BuildDirect( const char * message )
+/*static*/ void FLog::Output( const AString & message )
 {
-    Tracing::Output( message );
+    if ( message.IsEmpty() ) // Ignore empty messages for caller convenience
+    {
+        return;
+    }
+
+    Tracing::Output( message.Get() );
 }
 
 // Warning
 //------------------------------------------------------------------------------
-/*static*/ void FLog::Warning( const char * formatString, ... )
+/*static*/ void FLog::Warning( MSVC_SAL_PRINTF const char * formatString, ... )
 {
     AStackString< 8192 > buffer;
 
@@ -122,12 +131,12 @@ static FileStream * g_MonitorFileStream = nullptr;
     buffer.VFormat( formatString, args );
     va_end( args );
 
-    Output( "Warning:", buffer.Get() );
+    OutputInternal( "Warning:", buffer.Get() );
 }
 
 // Error
 //------------------------------------------------------------------------------
-/*static*/ void FLog::Error( const char * formatString, ... )
+/*static*/ void FLog::Error( MSVC_SAL_PRINTF const char * formatString, ... )
 {
     // we prevent output here, rather than where the macros is inserted
     // as an error being output is not the normal code path, and a check
@@ -144,7 +153,7 @@ static FileStream * g_MonitorFileStream = nullptr;
     buffer.VFormat( formatString, args );
     va_end( args );
 
-    Output( "Error:", buffer.Get() );
+    OutputInternal( "Error:", buffer.Get() );
 }
 
 // ErrorDirect
@@ -161,9 +170,9 @@ static FileStream * g_MonitorFileStream = nullptr;
 
 // Output - write to stdout and debugger
 //------------------------------------------------------------------------------
-/*static*/ void FLog::Output( const char * type, const char * message )
+/*static*/ void FLog::OutputInternal( const char * type, const char * message )
 {
-    if( type == nullptr )
+    if ( type == nullptr )
     {
         OUTPUT( "%s", message );
         return;
@@ -193,18 +202,30 @@ static FileStream * g_MonitorFileStream = nullptr;
         //  - we already have a .fbuild.tmp folder we should use
         AStackString<> fullPath;
         FBuild::GetTempDir( fullPath );
-        fullPath += "FastBuild/FastBuildLog.log";
-
-        ASSERT( g_MonitorFileStream == nullptr );
-        MutexHolder lock( g_MonitorMutex );
-        g_MonitorFileStream = new FileStream();
-        if ( g_MonitorFileStream->Open( fullPath.Get(), FileStream::WRITE_ONLY ) == false )
+        fullPath += "FastBuild";
+        if ( FileIO::DirectoryCreate( fullPath ) )
         {
-            delete g_MonitorFileStream;
-            g_MonitorFileStream = nullptr;
-        }
+            fullPath += "/FastBuildLog.log";
 
-        Monitor( "START_BUILD %u %u\n", FBUILD_MONITOR_VERSION, Process::GetCurrentId() );
+            ASSERT( g_MonitorFileStream == nullptr );
+            MutexHolder lock( g_MonitorMutex );
+            g_MonitorFileStream = new FileStream();
+            if ( g_MonitorFileStream->Open( fullPath.Get(), FileStream::WRITE_ONLY ) )
+            {
+                Monitor( "START_BUILD %u %u\n", FBUILD_MONITOR_VERSION, Process::GetCurrentId() );
+            }
+            else
+            {
+                Error( "Couldn't open monitor file for write at %s", fullPath.Get() );
+
+                delete g_MonitorFileStream;
+                g_MonitorFileStream = nullptr;
+            }
+        }
+        else
+        {
+            Error( "Couldn't create directory for monitor file at %s", fullPath.Get() );
+        }
     }
 
     Tracing::AddCallbackOutput( &TracingOutputCallback );
@@ -269,22 +290,22 @@ static FileStream * g_MonitorFileStream = nullptr;
     if ( timeTakenMinutes > 0 )
     {
         char buffer[ 8 ];
-        _itoa_s( timeTakenMinutes, buffer, 8, 10 );
+        _itoa_s( (int32_t)timeTakenMinutes, buffer, 8, 10 );
         m_ProgressText += buffer;
         m_ProgressText.Append( "m ", 2 );
     }
     char buffer[ 8 ];
-    _itoa_s( timeTakenSeconds, buffer, 8, 10 );
+    _itoa_s( (int32_t)timeTakenSeconds, buffer, 8, 10 );
     if ( timeTakenSeconds < 10 ) { m_ProgressText += '0'; }
     m_ProgressText += buffer;
     m_ProgressText += 's';
 
     // active/available jobs " (%u/%u)"
     m_ProgressText.Append( " (", 2 );
-    _itoa_s( numJobsActive, buffer, 8, 10 );
+    _itoa_s( (int32_t)numJobsActive, buffer, 8, 10 );
     m_ProgressText += buffer;
     m_ProgressText += '/';
-    _itoa_s( numJobsActive + numJobs, buffer, 8, 10 );
+    _itoa_s( (int32_t)( numJobsActive + numJobs ), buffer, 8, 10 );
     m_ProgressText += buffer;
     m_ProgressText += ')';
 
@@ -292,10 +313,10 @@ static FileStream * g_MonitorFileStream = nullptr;
     if ( FBuild::Get().GetOptions().m_AllowDistributed )
     {
         m_ProgressText.Append( "+(", 2 );
-        _itoa_s( numJobsDistActive, buffer, 8, 10 );
+        _itoa_s( (int32_t)numJobsDistActive, buffer, 8, 10 );
         m_ProgressText += buffer;
         m_ProgressText += '/';
-        _itoa_s( numJobsDistActive + numJobsDist, buffer, 8, 10 );
+        _itoa_s( (int32_t)( numJobsDistActive + numJobsDist ), buffer, 8, 10 );
         m_ProgressText += buffer;
         m_ProgressText += ')';
     }
@@ -343,7 +364,7 @@ static FileStream * g_MonitorFileStream = nullptr;
     if ( threadIndex > 0 )
     {
         char buffer[ 8 ];
-        _itoa_s( threadIndex, buffer, 8, 10 );
+        _itoa_s( (int32_t)threadIndex, buffer, 8, 10 );
         tmp += buffer;
         tmp += '>';
         if ( threadIndex < 10 )

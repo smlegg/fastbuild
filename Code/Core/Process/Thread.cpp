@@ -3,8 +3,6 @@
 
 // Includes
 //------------------------------------------------------------------------------
-#include "Core/PrecompiledHeader.h"
-
 #include "Thread.h"
 #include "Core/Env/Assert.h"
 #include "Core/Mem/Mem.h"
@@ -12,12 +10,16 @@
 
 // system
 #if defined( __WINDOWS__ )
-    #include <windows.h>
+    #include "Core/Env/WindowsHeader.h"
 #endif
 #if defined( __APPLE__ ) || defined( __LINUX__ )
     #include <errno.h>
     #include <pthread.h>
     #include <unistd.h>
+#endif
+
+#if !defined( __has_feature )
+    #define __has_feature( ... ) 0
 #endif
 
 // Debug Structure for thread name setting
@@ -102,14 +104,14 @@ public:
 
 //  Sleep
 //------------------------------------------------------------------------------
-/*static*/ void Thread::Sleep( int32_t ms )
+/*static*/ void Thread::Sleep( uint32_t ms )
 {
     PROFILE_FUNCTION
 
     #if defined( WIN32 ) || defined( WIN64 )
         ::Sleep( ms );
     #elif defined( __APPLE__ ) || defined( __LINUX__ )
-        usleep(ms * 1000);
+        usleep( ms * 1000 );
     #else
         #error Unknown platform
     #endif
@@ -122,7 +124,7 @@ public:
                                                       uint32_t stackSize,
                                                       void * userData )
 {
-    ThreadStartInfo& info = *FNEW( ThreadStartInfo( entryFunc, userData, threadName ) );
+    ThreadStartInfo & info = *FNEW( ThreadStartInfo( entryFunc, userData, threadName ) );
     MemoryBarrier();
 
     #if defined( __WINDOWS__ )
@@ -133,25 +135,60 @@ public:
                                    0,               // DWORD dwCreationFlags
                                    nullptr      // LPDWORD lpThreadId
                                  );
+        ASSERT( h != nullptr );
     #elif defined( __LINUX__ ) || defined( __APPLE__ )
-        pthread_t h;
+        #if __has_feature( address_sanitizer ) || defined( __SANITIZE_ADDRESS__ )
+            // AddressSanitizer instruments objects created on the stack by inserting redzones around them.
+            // This greatly increases the amount of stack space used by the program.
+            // To account for that double the requested stack size for the thread.
+            stackSize *= 2;
+        #endif
+        pthread_t h( 0 );
         pthread_attr_t threadAttr;
         VERIFY( pthread_attr_init( &threadAttr ) == 0 );
         VERIFY( pthread_attr_setstacksize( &threadAttr, stackSize ) == 0 );
         VERIFY( pthread_attr_setdetachstate( &threadAttr, PTHREAD_CREATE_JOINABLE ) == 0 );
         VERIFY( pthread_create( &h, &threadAttr, ThreadStartInfo::ThreadStartFunction, &info ) == 0 );
+        ASSERT( h != (pthread_t)0 );
     #else
         #error Unknown platform
     #endif
-
-    ASSERT( h != nullptr );
 
     return (Thread::ThreadHandle)h;
 }
 
 // WaitForThread
 //------------------------------------------------------------------------------
-/*static*/ int Thread::WaitForThread( ThreadHandle handle, uint32_t timeoutMS, bool & timedOut )
+/*static*/ int32_t Thread::WaitForThread( ThreadHandle handle )
+{
+    #if defined( __WINDOWS__ )
+        bool timedOut = true; // default is true to catch cases when timedOut wasn't set by WaitForThread()
+        int32_t ret = WaitForThread( handle, INFINITE, timedOut );
+
+        if ( timedOut )
+        {
+            // something is wrong - we were waiting an INFINITE time
+            ASSERT( false );
+            return 0;
+        }
+
+        return ret;
+    #elif defined( __APPLE__ ) || defined( __LINUX__ )
+        void * ret;
+        if ( pthread_join( (pthread_t)handle, &ret ) == 0 )
+        {
+            return (int)( (size_t)ret );
+        }
+        ASSERT( false ); // usage failure
+        return 0;
+    #else
+        #error Unknown platform
+    #endif
+}
+
+// WaitForThread
+//------------------------------------------------------------------------------
+/*static*/ int32_t Thread::WaitForThread( ThreadHandle handle, uint32_t timeoutMS, bool & timedOut )
 {
     #if defined( __WINDOWS__ )
         // wait for thread to finish
@@ -176,21 +213,20 @@ public:
         if ( ::GetExitCodeThread( handle, (LPDWORD)&ret ) )
         {
             timedOut = false;
-            return ret;
+            return (int32_t)ret;
         }
         ASSERT( false ); // invalid thread handle
         timedOut = false;
         return -1;
+    #elif __has_feature( thread_sanitizer ) || defined( __SANITIZE_THREAD__ )
+        // ThreadSanitizer doesn't support pthread_timedjoin_np yet (as of February 2018)
+        timedOut = false;
+        (void)timeoutMS;
+        return WaitForThread( handle );
     #elif defined( __APPLE__ )
         timedOut = false;
         (void)timeoutMS; // TODO:MAC Implement timeout support
-        void * ret;
-        if ( pthread_join( (pthread_t)handle, &ret ) == 0 )
-        {
-            return (int)( (size_t)ret );
-        }
-        ASSERT( false ); // usage failure
-        return 0;
+        return WaitForThread( handle );
     #elif defined( __LINUX__ )
         // timeout is specified in absolute time
         // - get current time
@@ -230,13 +266,26 @@ public:
     #endif
 }
 
+// DetachThread
+//------------------------------------------------------------------------------
+/*static*/ void Thread::DetachThread( ThreadHandle handle )
+{
+    #if defined( __WINDOWS__ )
+        (void)handle; // Nothing to do
+    #elif defined( __APPLE__ ) || defined( __LINUX__ )
+        VERIFY( pthread_detach( (pthread_t)handle ) == 0 );
+    #else
+        #error Unknown platform
+    #endif
+}
+
 // CloseHandle
 //------------------------------------------------------------------------------
 /*static*/ void Thread::CloseHandle( ThreadHandle h )
 {
     #if defined( __WINDOWS__ )
         ::CloseHandle( h );
-    #elif defined( __APPLE__ ) || defined(__LINUX__)
+    #elif defined( __APPLE__ ) || defined( __LINUX__ )
         (void)h; // Nothing to do
     #else
         #error Unknown platform
@@ -251,7 +300,7 @@ public:
         ASSERT( name );
 
         #if defined( __WINDOWS__ )
-            #if defined(__clang__)
+            #if defined( __clang__ )
                 // Clang for windows (3.7.1) crashes trying to compile this
             #else
                 const DWORD MS_VC_EXCEPTION=0x406D1388;
@@ -264,7 +313,7 @@ public:
 
                 __try
                 {
-                    RaiseException( MS_VC_EXCEPTION, 0, sizeof(info)/sizeof(ULONG_PTR), (ULONG_PTR*)&info );
+                    RaiseException( MS_VC_EXCEPTION, 0, sizeof(info) / sizeof(ULONG_PTR), (ULONG_PTR*)&info );
                 }
                 PRAGMA_DISABLE_PUSH_MSVC( 6320 ) // Exception-filter expression is the constant EXCEPTION_EXECUTE_HANDLER
                 __except( EXCEPTION_EXECUTE_HANDLER )

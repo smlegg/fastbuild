@@ -5,8 +5,9 @@
 //------------------------------------------------------------------------------
 #include "FBuildTest.h"
 
-#include "Tools/FBuild/FBuildCore/FBuild.h"
+// FBuildCore
 #include "Tools/FBuild/FBuildCore/BFF/BFFParser.h"
+#include "Tools/FBuild/FBuildCore/FBuild.h"
 
 #include "Core/FileIO/FileIO.h"
 #include "Core/Process/Process.h"
@@ -58,7 +59,7 @@ FBuildStats TestCLR::Build( FBuildTestOptions options, bool useDB, const char * 
     TEST_ASSERT( fBuild.Initialize( useDB ? GetTestDBFileName() : nullptr ) );
 
     // Build it
-    TEST_ASSERT( fBuild.Build( AStackString<>( target ) ) );
+    TEST_ASSERT( fBuild.Build( target ) );
     TEST_ASSERT( fBuild.SaveDependencyGraph( GetTestDBFileName() ) );
 
     return fBuild.GetStats();
@@ -185,7 +186,7 @@ void TestCLR::TestCLRToCPPBridge() const
         FBuildTestOptions options;
         options.m_ForceCleanBuild = true;
 
-        FBuildStats stats = Build( options, true, "BridgeTest-Exe" );
+        Build( options, true, "BridgeTest-Exe" );
 
         Process p;
         p.Spawn( "../tmp/Test/CLR/Bridge/Bridge.exe", nullptr, nullptr, nullptr );

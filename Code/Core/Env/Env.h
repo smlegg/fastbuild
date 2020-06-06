@@ -4,11 +4,12 @@
 
 // Includes
 //------------------------------------------------------------------------------
-#include "Types.h"
 #include "Core/Env/Assert.h"
+#include "Core/Env/Types.h"
 
 // Forward Declarations
 //------------------------------------------------------------------------------
+template< class T > class Array;
 class AString;
 
 // Env
@@ -16,10 +17,9 @@ class AString;
 class Env
 {
 public:
-    enum Platform
+    enum Platform : uint8_t
     {
         WINDOWS,
-        IOS,
         OSX,
         LINUX
     };
@@ -34,8 +34,12 @@ public:
     static bool SetEnvVariable( const char * envVarName, const AString & envVarValue );
     static void GetCmdLine( AString & cmdLine );
     static void GetExePath( AString & path );
+    static bool IsStdOutRedirected( const bool recheck = false );
+    static bool GetLocalUserName( AString & outUserName );
 
     static uint32_t GetLastErr();
+    static const char * AllocEnvironmentString( const Array< AString > & environment );
+    static void ShowMsgBox( const char * title, const char * msg );
 };
 
 // GetPlatform
@@ -44,8 +48,6 @@ public:
 {
     #if defined( __WINDOWS__ )
         return Env::WINDOWS;
-    #elif defined( __IOS__ )
-        return Env::IOS;
     #elif defined( __OSX__ )
         return Env::OSX;
     #elif defined( __LINUX__ )
@@ -60,7 +62,6 @@ public:
     switch ( platform )
     {
         case Env::WINDOWS:  return "Windows";
-        case Env::IOS:      return "IOS";
         case Env::OSX:      return "OSX";
         case Env::LINUX:    return "Linux";
     }

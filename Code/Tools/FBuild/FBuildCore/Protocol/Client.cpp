@@ -3,8 +3,6 @@
 
 // Includes
 //------------------------------------------------------------------------------
-#include "Tools/FBuild/FBuildCore/PrecompiledHeader.h"
-
 #include "Client.h"
 
 #include "Tools/FBuild/FBuildCore/Protocol/Protocol.h"
@@ -14,15 +12,17 @@
 #include "Tools/FBuild/FBuildCore/Graph/FileNode.h"
 #include "Tools/FBuild/FBuildCore/Graph/Node.h"
 #include "Tools/FBuild/FBuildCore/Graph/ObjectNode.h"
+#include <Tools/FBuild/FBuildCore/Helpers/MultiBuffer.h>
 #include "Tools/FBuild/FBuildCore/WorkerPool/Job.h"
 #include "Tools/FBuild/FBuildCore/WorkerPool/JobQueue.h"
 
-#include "Core/Env/Env.h"
+#include "Core/Env/ErrorFormat.h"
 #include "Core/FileIO/ConstMemoryStream.h"
 #include "Core/FileIO/FileIO.h"
 #include "Core/FileIO/FileStream.h"
 #include "Core/FileIO/MemoryStream.h"
 #include "Core/Math/Random.h"
+#include "Core/Process/Atomic.h"
 #include "Core/Profile/Profile.h"
 
 // Defines
@@ -30,7 +30,7 @@
 #define CLIENT_STATUS_UPDATE_FREQUENCY_SECONDS ( 0.1f )
 #define CONNECTION_REATTEMPT_DELAY_TIME ( 10.0f )
 #define SYSTEM_ERROR_ATTEMPT_COUNT ( 3 )
-#define DIST_INFO( ... ) if ( m_DetailedLogging ) { FLOG_BUILD( __VA_ARGS__ ); }
+#define DIST_INFO( ... ) if ( m_DetailedLogging ) { FLOG_OUTPUT( __VA_ARGS__ ); }
 
 // CONSTRUCTOR
 //------------------------------------------------------------------------------
@@ -40,7 +40,6 @@ Client::Client( const Array< AString > & workerList,
                 bool detailedLogging )
     : m_WorkerList( workerList )
     , m_ShouldExit( false )
-    , m_Exited( false )
     , m_DetailedLogging( detailedLogging )
     , m_WorkerConnectionLimit( workerConnectionLimit )
     , m_Port( port )
@@ -61,11 +60,8 @@ Client::~Client()
 {
     SetShuttingDown();
 
-    m_ShouldExit = true;
-    while ( m_Exited == false )
-    {
-        Thread::Sleep( 1 );
-    }
+    AtomicStoreRelaxed( &m_ShouldExit, true );
+    Thread::WaitForThread( m_Thread );
 
     ShutdownAllConnections();
 
@@ -99,7 +95,7 @@ Client::~Client()
     FREE( (void *)( ss->m_CurrentMessage ) );
 
     ss->m_RemoteName.Clear();
-    ss->m_Connection = nullptr;
+    AtomicStoreRelaxed( &ss->m_Connection, static_cast< const ConnectionInfo * >( nullptr ) );
     ss->m_CurrentMessage = nullptr;
 }
 
@@ -126,31 +122,23 @@ void Client::ThreadFunc()
     for ( ;; )
     {
         LookForWorkers();
-        if ( m_ShouldExit )
+        if ( AtomicLoadRelaxed( &m_ShouldExit ) )
         {
             break;
         }
 
         CommunicateJobAvailability();
-        if ( m_ShouldExit )
-        {
-            break;
-        }
-
-        CheckForTimeouts();
-        if ( m_ShouldExit )
+        if ( AtomicLoadRelaxed( &m_ShouldExit ) )
         {
             break;
         }
 
         Thread::Sleep( 1 );
-        if ( m_ShouldExit )
+        if ( AtomicLoadRelaxed( &m_ShouldExit ) )
         {
             break;
         }
     }
-
-    m_Exited = true;
 }
 
 // LookForWorkers
@@ -167,7 +155,7 @@ void Client::LookForWorkers()
     size_t numConnections = 0;
     for ( size_t i=0; i<numWorkers; i++ )
     {
-        if ( m_ServerList[ i ].m_Connection )
+        if ( AtomicLoadRelaxed( &m_ServerList[ i ].m_Connection ) )
         {
             numConnections++;
         }
@@ -197,7 +185,7 @@ void Client::LookForWorkers()
         const size_t i( ( j + startIndex ) % numWorkers );
 
         ServerState & ss = m_ServerList[ i ];
-        if ( ss.m_Connection )
+        if ( AtomicLoadRelaxed( &ss.m_Connection ) )
         {
             continue;
         }
@@ -218,20 +206,21 @@ void Client::LookForWorkers()
             continue;
         }
 
+        DIST_INFO( "Connecting to: %s\n", m_WorkerList[ i ].Get() );
         const ConnectionInfo * ci = Connect( m_WorkerList[ i ], m_Port, 2000, &ss ); // 2000ms connection timeout
         if ( ci == nullptr )
         {
+            DIST_INFO( " - connection: %s (FAILED)\n", m_WorkerList[ i ].Get() );
             ss.m_DelayTimer.Start(); // reset connection attempt delay
         }
         else
         {
-            DIST_INFO( "Connected: %s\n", m_WorkerList[ i ].Get() );
-            const uint32_t numJobsAvailable( JobQueue::IsValid() ? (uint32_t)JobQueue::Get().GetNumDistributableJobsAvailable() : 0 );
+            DIST_INFO( " - connection: %s (OK)\n", m_WorkerList[ i ].Get() );
+            const uint32_t numJobsAvailable = (uint32_t)JobQueue::Get().GetNumDistributableJobsAvailable();
 
             ss.m_RemoteName = m_WorkerList[ i ];
-            ss.m_Connection = ci; // success!
+            AtomicStoreRelaxed( &ss.m_Connection, ci ); // success!
             ss.m_NumJobsAvailable = numJobsAvailable;
-            ss.m_StatusTimer.Start();
 
             // send connection msg
             Protocol::MsgConnection msg( numJobsAvailable );
@@ -257,12 +246,6 @@ void Client::CommunicateJobAvailability()
 
     m_StatusUpdateTimer.Start(); // reset time
 
-    // possible for job queue to not exist yet
-    if ( !JobQueue::IsValid() )
-    {
-        return;
-    }
-
     // has status changed since we last sent it?
     uint32_t numJobsAvailable = (uint32_t)JobQueue::Get().GetNumDistributableJobsAvailable();
     Protocol::MsgStatus msg( numJobsAvailable );
@@ -278,49 +261,20 @@ void Client::CommunicateJobAvailability()
     const ServerState * const end = m_ServerList.End();
     while ( it != end )
     {
-        if ( it->m_Connection )
+        if ( AtomicLoadRelaxed( &it->m_Connection ) )
         {
             MutexHolder ssMH( it->m_Mutex );
-            if ( it->m_Connection )
+            if ( const ConnectionInfo * connection = AtomicLoadRelaxed( &it->m_Connection ) )
             {
                 if ( it->m_NumJobsAvailable != numJobsAvailable )
                 {
                     PROFILE_SECTION( "UpdateJobAvailability" )
-                    SendMessageInternal( it->m_Connection, msg );
+                    SendMessageInternal( connection, msg );
                     it->m_NumJobsAvailable = numJobsAvailable;
                 }
             }
         }
         ++it;
-    }
-}
-
-// CheckForTimeouts
-//------------------------------------------------------------------------------
-void Client::CheckForTimeouts()
-{
-    PROFILE_FUNCTION
-
-    MutexHolder mh( m_ServerListMutex );
-
-    // update each server to know how many jobs we have now
-    const ServerState * const end = m_ServerList.End();
-    for ( ServerState * it = m_ServerList.Begin(); it != end; ++it )
-    {
-        ServerState & ss = *it;
-        MutexHolder ssMH( ss.m_Mutex );
-        if ( ss.m_Connection )
-        {
-            if ( ss.m_StatusTimer.GetElapsedMS() >= Protocol::SERVER_STATUS_TIMEOUT_MS )
-            {
-                DIST_INFO( "Timed out: %s\n", ss.m_RemoteName.Get() );
-                Disconnect( ss.m_Connection );
-            }
-        }
-        else
-        {
-            ASSERT( ss.m_Jobs.IsEmpty() );
-        }
     }
 }
 
@@ -418,12 +372,6 @@ void Client::SendMessageInternal( const ConnectionInfo * connection, const Proto
             Process( connection, msg );
             break;
         }
-        case Protocol::MSG_SERVER_STATUS:
-        {
-            const Protocol::MsgServerStatus * msg = static_cast< const Protocol::MsgServerStatus * >( imsg );
-            Process( connection, msg );
-            break;
-        }
         default:
         {
             // unknown message type
@@ -445,11 +393,6 @@ void Client::SendMessageInternal( const ConnectionInfo * connection, const Proto
 void Client::Process( const ConnectionInfo * connection, const Protocol::MsgRequestJob * )
 {
     PROFILE_SECTION( "MsgRequestJob" )
-
-    if ( JobQueue::IsValid() == false )
-    {
-        return;
-    }
 
     ServerState * ss = (ServerState *)connection->GetUserData();
     ASSERT( ss );
@@ -490,7 +433,10 @@ void Client::Process( const ConnectionInfo * connection, const Protocol::MsgRequ
     ASSERT( toolId );
 
     // output to signify remote start
-    FLOG_BUILD( "-> Obj: %s <REMOTE: %s>\n", job->GetNode()->GetName().Get(), ss->m_RemoteName.Get() );
+    if ( FBuild::Get().GetOptions().m_ShowCommandSummary )
+    {
+        FLOG_OUTPUT( "-> Obj: %s <REMOTE: %s>\n", job->GetNode()->GetName().Get(), ss->m_RemoteName.Get() );
+    }
     FLOG_MONITOR( "START_JOB %s \"%s\" \n", ss->m_RemoteName.Get(), job->GetNode()->GetName().Get() );
 
     {
@@ -553,9 +499,12 @@ void Client::Process( const ConnectionInfo * connection, const Protocol::MsgJobR
                                           job->GetNode()->GetName().Get(),
                                           job->GetDistributionState() == Job::DIST_RACE_WON_REMOTELY ? " (Won Race)" : "" );
 
+    job->SetMessages( messages );
+
     if ( result == true )
     {
         // built ok - serialize to disc
+        MultiBuffer mb( data, ms.GetSize() - ms.Tell() );
 
         ObjectNode * objectNode = job->GetNode()->CastTo< ObjectNode >();
         const AString & nodeName = objectNode->GetName();
@@ -566,31 +515,38 @@ void Client::Process( const ConnectionInfo * connection, const Protocol::MsgJobR
         }
         else
         {
-            const ObjectNode * on = job->GetNode()->CastTo< ObjectNode >();
-            const uint32_t firstFileSize = *(uint32_t *)data;
-            const uint32_t secondFileSize = on->IsUsingPDB() ? *(uint32_t *)( (const char *)data + sizeof( uint32_t ) + firstFileSize ) : 0;
+            size_t fileIndex = 0;
 
-            result = WriteFileToDisk( nodeName, (const char *)data + sizeof( uint32_t ), firstFileSize );
+            const ObjectNode * on = job->GetNode()->CastTo< ObjectNode >();
+
+            // 1. Object file
+            result = WriteFileToDisk( nodeName, mb, fileIndex++ );
+
+            // 2. PDB file (optional)
             if ( result && on->IsUsingPDB() )
             {
-                data = (const void *)( (const char *)data + sizeof( uint32_t ) + firstFileSize );
-                ASSERT( ( firstFileSize + secondFileSize + ( sizeof( uint32_t ) * 2 ) ) == size );
-
                 AStackString<> pdbName;
                 on->GetPDBName( pdbName );
-                result = WriteFileToDisk( pdbName, (const char *)data + sizeof( uint32_t ), secondFileSize );
+                result = WriteFileToDisk( pdbName, mb, fileIndex++ );
             }
 
-            if ( result == true )
+            // 3. .nativecodeanalysis.xml (optional)
+            if ( result && on->IsUsingStaticAnalysisMSVC() )
             {
-                // record build time
-                FileNode * f = (FileNode *)job->GetNode();
-                f->m_Stamp = FileIO::GetFileLastWriteTime( nodeName );
+                AStackString<> xmlFileName;
+                on->GetNativeAnalysisXMLPath( xmlFileName );
+                result = WriteFileToDisk( xmlFileName, mb, fileIndex++ );
+            }
+
+            if ( result )
+            {
+                // record new file time
+                objectNode->RecordStampFromBuiltFile();
 
                 // record time taken to build
-                f->SetLastBuildTime( buildTime );
-                f->SetStatFlag(Node::STATS_BUILT);
-                f->SetStatFlag(Node::STATS_BUILT_REMOTE);
+                objectNode->SetLastBuildTime( buildTime );
+                objectNode->SetStatFlag(Node::STATS_BUILT);
+                objectNode->SetStatFlag(Node::STATS_BUILT_REMOTE);
 
                 // commit to cache?
                 if ( FBuild::Get().GetOptions().m_UseCacheWrite &&
@@ -601,7 +557,26 @@ void Client::Process( const ConnectionInfo * connection, const Protocol::MsgJobR
             }
             else
             {
-                ((FileNode *)job->GetNode())->GetStatFlag( Node::STATS_FAILED );
+                objectNode->GetStatFlag( Node::STATS_FAILED );
+            }
+        }
+
+        // get list of messages during remote work
+        AStackString<> msgBuffer;
+        job->GetMessagesForLog( msgBuffer );
+
+        if ( objectNode->IsMSVC())
+        {
+            if ( objectNode->GetFlag( ObjectNode::FLAG_WARNINGS_AS_ERRORS_MSVC ) == false )
+            {
+                FileNode::HandleWarningsMSVC( job, objectNode->GetName(), msgBuffer.Get(), msgBuffer.GetLength() );
+            }
+        }
+        else if ( objectNode->IsClang() || objectNode->IsGCC() )
+        {
+            if ( !objectNode->GetFlag( ObjectNode::FLAG_WARNINGS_AS_ERRORS_CLANGGCC ) )
+            {
+                FileNode::HandleWarningsClangGCC( job, objectNode->GetName(), msgBuffer.Get(), msgBuffer.GetLength() );
             }
         }
     }
@@ -628,15 +603,18 @@ void Client::Process( const ConnectionInfo * connection, const Protocol::MsgJobR
             job->OnSystemError();
 
             // debugging message
-            const size_t workerIndex = ( ss - m_ServerList.Begin() );
+            const size_t workerIndex = (size_t)( ss - m_ServerList.Begin() );
             const AString & workerName = m_WorkerList[ workerIndex ];
-            FLOG_INFO( "Remote System Failure!\n"
+            DIST_INFO( "Remote System Failure!\n"
                        " - Blacklisted Worker: %s\n"
                        " - Node              : %s\n"
-                       " - Job Error Count   : %u / %u\n",
+                       " - Job Error Count   : %u / %u\n"
+                       " - Details           :\n"
+                       "%s",
                        workerName.Get(),
                        job->GetNode()->GetName().Get(),
-                       job->GetSystemErrorCount(), SYSTEM_ERROR_ATTEMPT_COUNT
+                       job->GetSystemErrorCount(), SYSTEM_ERROR_ATTEMPT_COUNT,
+                       failureOutput.Get()
                       );
 
             // should we retry on another worker?
@@ -696,7 +674,7 @@ void Client::Process( const ConnectionInfo * connection, const Protocol::MsgRequ
     }
 
     MemoryStream ms;
-    manifest->Serialize( ms );
+    manifest->SerializeForRemote( ms );
 
     // Send manifest to worker
     Protocol::MsgManifest resultMsg( toolId );
@@ -739,22 +717,6 @@ void Client::Process( const ConnectionInfo * connection, const Protocol::MsgRequ
     resultMsg.Send( connection, ms );
 }
 
-// Process ( MsgServerStatus )
-//------------------------------------------------------------------------------
-void Client::Process( const ConnectionInfo * connection, const Protocol::MsgServerStatus * msg )
-{
-    PROFILE_SECTION( "MsgServerStatus" )
-
-    (void)msg;
-
-    // find server
-    ServerState * ss = (ServerState *)connection->GetUserData();
-    ASSERT( ss );
-
-    MutexHolder mh( ss->m_Mutex );
-    ss->m_StatusTimer.Start();
-}
-
 // FindManifest
 //------------------------------------------------------------------------------
 const ToolManifest * Client::FindManifest( const ConnectionInfo * connection, uint64_t toolId ) const
@@ -782,30 +744,13 @@ const ToolManifest * Client::FindManifest( const ConnectionInfo * connection, ui
 
 // WriteFileToDisk
 //------------------------------------------------------------------------------
-bool Client::WriteFileToDisk( const AString & fileName, const char * data, const uint32_t dataSize ) const
+bool Client::WriteFileToDisk( const AString & fileName, const MultiBuffer & multiBuffer, size_t index ) const
 {
-    // Open the file
-    FileStream fs;
-    if ( fs.Open( fileName.Get(), FileStream::WRITE_ONLY ) == false )
+    if ( multiBuffer.ExtractFile( index, fileName ) == false )
     {
-        // On Windows, we can occasionally fail to open the file with error 1224 (ERROR_USER_MAPPED_FILE), due to
-        // things like anti-virus etc. Simply retry if that happens
-        FileIO::WorkAroundForWindowsFilePermissionProblem( fileName );
-
-        if ( fs.Open( fileName.Get(), FileStream::WRITE_ONLY ) == false )
-        {
-            FLOG_ERROR( "Failed to create file '%s' (Err: %u)", fileName.Get(), Env::GetLastErr() );
-            return false;
-        }
-    }
-
-    // Write the contents
-    if ( fs.WriteBuffer( data, dataSize ) != dataSize )
-    {
-        FLOG_ERROR( "Failed to write file '%s' (Err: %u)", fileName.Get(), Env::GetLastErr() );
+        FLOG_ERROR( "Failed to create file. Error: %s File: '%s'", LAST_ERROR_STR, fileName.Get() );
         return false;
     }
-
     return true;
 }
 

@@ -3,8 +3,6 @@
 
 // Includes
 //------------------------------------------------------------------------------
-#include "Tools/FBuild/FBuildCore/PrecompiledHeader.h"
-
 #include "FunctionCopyDir.h"
 #include "Tools/FBuild/FBuildCore/FBuild.h"
 #include "Tools/FBuild/FBuildCore/Graph/CopyDirNode.h"
@@ -27,23 +25,18 @@ FunctionCopyDir::FunctionCopyDir()
     return true;
 }
 
-// Commit
+// NeedsHeader
 //------------------------------------------------------------------------------
-/*virtual*/ bool FunctionCopyDir::Commit( NodeGraph & nodeGraph, const BFFIterator & funcStartIter ) const
+/*virtual*/ bool FunctionCopyDir::NeedsHeader() const
 {
-    CopyDirNode * copyDirNode = nodeGraph.CreateCopyDirNode( m_AliasForFunction );
-
-    if ( !PopulateProperties( nodeGraph, funcStartIter, copyDirNode ) )
-    {
-        return false;
-    }
-
-    if ( !copyDirNode->Initialize( nodeGraph, funcStartIter, this ) )
-    {
-        return false;
-    }
-
     return true;
+}
+
+// CreateNode
+//------------------------------------------------------------------------------
+/*virtual*/ Node * FunctionCopyDir::CreateNode() const
+{
+    return FNEW( CopyDirNode );
 }
 
 //------------------------------------------------------------------------------

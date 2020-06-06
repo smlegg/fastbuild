@@ -3,8 +3,6 @@
 
 // Includes
 //------------------------------------------------------------------------------
-#include "Tools/FBuild/FBuildCore/PrecompiledHeader.h"
-
 #include "FunctionExec.h"
 #include "Tools/FBuild/FBuildCore/FBuild.h"
 #include "Tools/FBuild/FBuildCore/Graph/NodeGraph.h"
@@ -24,35 +22,11 @@ FunctionExec::FunctionExec()
     return true;
 }
 
-// Commit
+// CreateNode
 //------------------------------------------------------------------------------
-/*virtual*/ bool FunctionExec::Commit( NodeGraph & nodeGraph, const BFFIterator & funcStartIter ) const
+/*virtual*/ Node * FunctionExec::CreateNode() const
 {
-    AStackString<> name;
-    if ( GetNameForNode( nodeGraph, funcStartIter, ExecNode::GetReflectionInfoS(), name ) == false )
-    {
-        return false;
-    }
-
-    if ( nodeGraph.FindNode( name ) )
-    {
-        Error::Error_1100_AlreadyDefined( funcStartIter, this, name );
-        return false;
-    }
-    ExecNode * execNode = nodeGraph.CreateExecNode( name );
-
-    if ( !PopulateProperties( nodeGraph, funcStartIter, execNode ) )
-    {
-        return false;
-    }
-
-    if ( !execNode->Initialize( nodeGraph, funcStartIter, this ) )
-    {
-        return false;
-    }
-
-    // handle alias creation
-    return ProcessAlias( nodeGraph, funcStartIter, execNode );
+    return FNEW( ExecNode );
 }
 
 //------------------------------------------------------------------------------

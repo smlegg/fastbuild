@@ -3,14 +3,12 @@
 
 // Includes
 //------------------------------------------------------------------------------
-#include "Core/PrecompiledHeader.h"
-
 #include "Time.h"
 #include "Core/Env/Assert.h"
 
 // system
 #if defined( __WINDOWS__ )
-    #include <Windows.h>
+    #include "Core/Env/WindowsHeader.h"
 #endif
 #if defined( __APPLE__ ) || defined( __LINUX__ )
     #include <sys/time.h>
@@ -26,7 +24,7 @@ uint64_t Time::GetCurrentFileTime()
         GetSystemTime( &st );
         if ( SystemTimeToFileTime( &st, &ft ) == FALSE )
         {
-            ASSERT(false); // Should never fail
+            ASSERT( false ); // Should never fail
             return 0;
         }
         const uint64_t fileTimeNow = ( (uint64_t)ft.dwLowDateTime | ( (uint64_t)ft.dwHighDateTime << 32 ) );
@@ -41,4 +39,14 @@ uint64_t Time::GetCurrentFileTime()
     #endif
 }
 
+// FileTimeToSeconds
+//------------------------------------------------------------------------------
+uint64_t Time::FileTimeToSeconds( uint64_t filetime )
+{
+    #if defined( __WINDOWS__ )
+        return ( filetime / 10000000U );
+    #else
+        return ( filetime / 1000000000ULL );
+    #endif
+}
 //------------------------------------------------------------------------------

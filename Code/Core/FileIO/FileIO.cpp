@@ -3,8 +3,6 @@
 
 // Includes
 //------------------------------------------------------------------------------
-#include "Core/PrecompiledHeader.h"
-
 #include "FileIO.h"
 #include "FileStream.h"
 
@@ -17,11 +15,13 @@
 
 // system
 #if defined( __WINDOWS__ )
-    #include <windows.h>
+    #include "Core/Env/WindowsHeader.h"
+    #include "Core/Time/Time.h"
 #endif
 #if defined( __LINUX__ ) || defined( __APPLE__ )
     #include <dirent.h>
     #include <errno.h>
+    #include <libgen.h>
     #include <limits.h>
     #include <stdio.h>
     #include <sys/stat.h>
@@ -33,7 +33,42 @@
 #endif
 #if defined( __APPLE__ )
     #include <copyfile.h>
+    #include <dlfcn.h>
     #include <sys/time.h>
+#endif
+
+// OSXHelper_utimensat
+//------------------------------------------------------------------------------
+#if defined( __APPLE__ )
+    // OS X 10.13 (High Sierra) adds support for utimensat
+    // OS X 10.13 (High Sierra) adds the Apple File System (APFS) which supports nsec time resolution
+    // OS X 10.14 (Mojave) uses APFS for all drives/devices
+    //
+    // We want to set higher resolution timestamps where possible, but we want to
+    // retain compatibility with older versions of OS X. To do this, we get the
+    // utimensat symbol dynamically from the C runtime.
+    //
+    class OSXHelper_utimensat
+    {
+    public:
+        typedef int (*FuncPtr)( int dirfd, const char * pathname, const struct timespec times[ 2 ], int flags );
+        
+        OSXHelper_utimensat()
+        {
+            // Open the c runtime library
+            m_LibCHandle = dlopen( "libc.dylib", RTLD_LAZY );
+            ASSERT( m_LibCHandle ); // This should never fail
+        
+            // See if utimensat exists
+            m_FuncPtr = (FuncPtr)dlsym( m_LibCHandle, "utimensat" );
+        }
+        ~OSXHelper_utimensat()
+        {
+            VERIFY( dlclose( m_LibCHandle ) == 0 );
+        }
+        void *          m_LibCHandle    = nullptr;
+        FuncPtr         m_FuncPtr       = nullptr;
+    } gOSXHelper_utimensat;
 #endif
 
 // Exists
@@ -51,7 +86,7 @@
     return true; // note this might not be file!
 #elif defined( __LINUX__ ) || defined( __APPLE__ )
     struct stat st;
-    if ( stat( fileName, &st ) == 0 )
+    if ( lstat( fileName, &st ) == 0 )
     {
         if ( ( st.st_mode & S_IFDIR ) != S_IFDIR )
         {
@@ -112,12 +147,15 @@
 
 // Copy
 //------------------------------------------------------------------------------
-/*static*/ bool FileIO::FileCopy( const char * srcFileName, const char * dstFileName,
-                              bool allowOverwrite )
+/*static*/ bool FileIO::FileCopy( const char * srcFileName,
+                                  const char * dstFileName,
+                                  bool allowOverwrite )
 {
 #if defined( __WINDOWS__ )
-    BOOL failIfDestExists = ( allowOverwrite ? FALSE : TRUE );
-    BOOL result = CopyFile( srcFileName, dstFileName, failIfDestExists );
+    DWORD flags = COPY_FILE_COPY_SYMLINK;
+    flags = ( allowOverwrite ? flags : flags | COPY_FILE_FAIL_IF_EXISTS );
+
+    BOOL result = CopyFileEx( srcFileName, dstFileName, nullptr, nullptr, nullptr, flags );
     if ( result == FALSE )
     {
         // even if we allow overwrites, Windows will fail if the dest file
@@ -143,7 +181,7 @@
             }
 
             // try to copy again
-            result = CopyFile( srcFileName, dstFileName, failIfDestExists );
+            result = CopyFileEx( srcFileName, dstFileName, nullptr, nullptr, nullptr, flags );
             return ( result == TRUE );
         }
     }
@@ -157,10 +195,11 @@
             return false;
         }
     }
-    copyfile_state_t s;
-    s = copyfile_state_alloc();
-    bool result = ( copyfile( srcFileName, dstFileName, s, COPYFILE_DATA | COPYFILE_XATTR ) == 0 );
-    copyfile_state_free(s);
+    // If the state parameter is the return value from copyfile_state_alloc(),
+    // then copyfile() and fcopyfile() will use the information from the state
+    // object; if it is NULL, then both functions will work normally, but less
+    // control will be available to the caller.
+    bool result = ( copyfile( srcFileName, dstFileName, nullptr, COPYFILE_DATA | COPYFILE_XATTR | COPYFILE_NOFOLLOW ) == 0 );
     return result;
 #elif defined( __LINUX__ )
     if ( allowOverwrite == false )
@@ -171,14 +210,27 @@
         }
     }
 
+    struct stat stat_source;
+    VERIFY( lstat( srcFileName, &stat_source ) == 0 );
+
+    // Special case symlinks.
+    if ( S_ISLNK( stat_source.st_mode ) )
+    {
+        AString linkPath( stat_source.st_size + 1 );
+        ssize_t length = readlink( srcFileName, linkPath.Get(), linkPath.GetReserved() );
+        if ( length != stat_source.st_size )
+        {
+            return false;
+        }
+        linkPath.SetLength( length );
+        return symlink( linkPath.Get(), dstFileName ) == 0;
+    }
+
     int source = open( srcFileName, O_RDONLY, 0 );
     if ( source < 0 )
     {
         return false;
     }
-
-    struct stat stat_source;
-    VERIFY( fstat( source, &stat_source ) == 0 );
 
     // Ensure dest file will be writable if it exists
     FileIO::SetReadOnly( dstFileName, false );
@@ -201,8 +253,8 @@
 
     ssize_t bytesCopied = sendfile( dest, source, 0, stat_source.st_size );
 
-    close(source);
-    close(dest);
+    close( source );
+    close( dest );
 
     return ( bytesCopied == stat_source.st_size );
 #else
@@ -251,9 +303,9 @@
 // GetFilesEx
 //------------------------------------------------------------------------------
 /*static*/ bool FileIO::GetFilesEx( const AString & path,
-                                  const Array< AString > * patterns,
-                                  bool recurse,
-                                  Array< FileInfo > * results )
+                                    const Array< AString > * patterns,
+                                    bool recurse,
+                                    Array< FileInfo > * results )
 {
     ASSERT( results );
 
@@ -289,7 +341,7 @@
         }
     #elif defined( __APPLE__ ) || defined( __LINUX__ )
         struct stat s;
-        if ( stat( fileName.Get(), &s ) == 0 )
+        if ( lstat( fileName.Get(), &s ) == 0 )
         {
             info.m_Name = fileName;
             info.m_Attributes = s.st_mode;
@@ -426,7 +478,7 @@
             return true;
         }
     #elif defined( __LINUX__ ) || defined( __APPLE__ )
-        umask( 0 ); // disable default creation mask
+        umask( 0 ); // disable default creation mask // TODO:LINUX TODO:MAC Changes global program state; needs investigation
         mode_t mode = S_IRWXU | S_IRWXG | S_IRWXO; // TODO:LINUX TODO:MAC Check these permissions
         if ( mkdir( path.Get(), mode ) == 0 )
         {
@@ -459,7 +511,7 @@
         }
     #elif defined( __LINUX__ ) || defined( __APPLE__ )
         struct stat st;
-        if ( stat( path.Get(), &st ) == 0 )
+        if ( lstat( path.Get(), &st ) == 0 )
         {
             if ( ( st.st_mode & S_IFDIR ) != 0 )
             {
@@ -476,7 +528,7 @@
 /*static*/ bool FileIO::EnsurePathExists( const AString & path )
 {
     // if the entire path already exists, nothing is to be done
-    if( DirectoryExists( path ) )
+    if ( DirectoryExists( path ) )
     {
         return true;
     }
@@ -528,6 +580,62 @@
     return true;
 }
 
+// EnsurePathExistsForFile
+//------------------------------------------------------------------------------
+/*static*/ bool FileIO::EnsurePathExistsForFile( const AString & name )
+{
+    const char * lastSlashA = name.FindLast( NATIVE_SLASH );
+    const char * lastSlashB = name.FindLast( OTHER_SLASH );
+    const char * lastSlash = lastSlashA > lastSlashB ? lastSlashA : lastSlashB;
+    ASSERT( lastSlash ); // Caller must pass something valid
+    AStackString<> pathOnly( name.Get(), lastSlash );
+    return EnsurePathExists( pathOnly );
+}
+
+// GetDirectoryIsMountPoint
+//------------------------------------------------------------------------------
+#if !defined( __WINDOWS__ )
+    /*static*/ bool FileIO::GetDirectoryIsMountPoint( const AString & path )
+    {
+        // stat the path
+        struct stat pathStat;
+        if ( stat( path.Get(), &pathStat ) != 0 )
+        {
+            return false; // Can't stat the path  (probably doesn't exist)
+        }
+
+        // Is it a dir?
+        if ( ( pathStat.st_mode & S_IFDIR ) == 0 )
+        {
+            return false; // Not a directory, so can't be a mount point
+        }
+
+        // stat parent dir
+        AStackString<> pathCopy( path ); // dirname modifies string, so we need a copy
+        const char * parentName = dirname( pathCopy.Get() );
+        struct stat parentStat;
+        if ( stat( parentName, &parentStat ) != 0 )
+        {
+            return false; // Can't stat parent dir, then something is wrong
+        }
+
+        // Compare device ids
+        if ( pathStat.st_dev != parentStat.st_dev )
+        {
+            return true; // On a different device, so must be a mount point
+        }
+
+        // If path and parent are the same, it's a root node (and therefore also a mount point)
+        if ( ( pathStat.st_dev == parentStat.st_dev ) &&
+             ( pathStat.st_ino == parentStat.st_ino ) )
+        {
+             return true;
+        }
+
+        return false; // Not a mount point
+    }
+#endif
+
 // GetFileLastWriteTime
 //------------------------------------------------------------------------------
 /*static*/ uint64_t FileIO::GetFileLastWriteTime( const AString & fileName )
@@ -542,18 +650,13 @@
         }
     #elif defined( __APPLE__ )
         struct stat st;
-        if ( stat( fileName.Get(), &st ) == 0 )
+        if ( lstat( fileName.Get(), &st ) == 0 )
         {
-            // OSX only supports setting filetimes at usec granularity
-            // so if we ever receive times with sub-usec granularity
-            // we will lose accuracy.
-            ASSERT( ( st.st_mtimespec.tv_nsec % 1000 ) == 0 );
-
             return ( ( (uint64_t)st.st_mtimespec.tv_sec * 1000000000ULL ) + (uint64_t)st.st_mtimespec.tv_nsec );
         }
     #elif defined( __LINUX__ )
         struct stat st;
-        if ( stat( fileName.Get(), &st ) == 0 )
+        if ( lstat( fileName.Get(), &st ) == 0 )
         {
             return ( ( (uint64_t)st.st_mtim.tv_sec * 1000000000ULL ) + (uint64_t)st.st_mtim.tv_nsec );
         }
@@ -572,7 +675,7 @@
         // TOOD:B Check these args
         HANDLE hFile = CreateFile( fileName.Get(), GENERIC_WRITE, FILE_SHARE_WRITE, nullptr,
                                    OPEN_EXISTING, 0, nullptr);
-        if( hFile == INVALID_HANDLE_VALUE )
+        if ( hFile == INVALID_HANDLE_VALUE )
         {
             return false;
         }
@@ -592,18 +695,51 @@
 
         return true;
     #elif defined( __APPLE__ )
+        // Use higher precision function if available
+        if ( gOSXHelper_utimensat.m_FuncPtr )
+        {
+            struct timespec t[ 2 ];
+            t[ 0 ].tv_sec = fileTime / 1000000000ULL;
+            t[ 0 ].tv_nsec = ( fileTime % 1000000000ULL );
+            t[ 1 ] = t[ 0 ];
+            return ( (gOSXHelper_utimensat.m_FuncPtr)( 0, fileName.Get(), t, 0 ) == 0 );
+        }
+    
+        // Fallback to regular low-resolution filetime setting
         struct timeval t[ 2 ];
-        t[0].tv_sec = fileTime / 1000000000ULL;
-        ASSERT( ( ( fileTime % 1000000000ULL ) % 1000 ) == 0 ); // ensure no loss of accuracy
-        t[0].tv_usec = ( fileTime % 1000000000ULL ) / 1000;
-        t[1] = t[0];
+        t[ 0 ].tv_sec = fileTime / 1000000000ULL;
+        t[ 0 ].tv_usec = ( fileTime % 1000000000ULL ) / 1000;
+        t[ 1 ] = t[ 0 ];
         return ( utimes( fileName.Get(), t ) == 0 );
-    #elif defined( __LINUX__ ) || defined( __APPLE__ )
+    #elif defined( __LINUX__ )
         struct timespec t[ 2 ];
-        t[0].tv_sec = fileTime / 1000000000ULL;
-        t[0].tv_nsec = ( fileTime % 1000000000ULL );
-        t[1] = t[0];
+        t[ 0 ].tv_sec = fileTime / 1000000000ULL;
+        t[ 0 ].tv_nsec = ( fileTime % 1000000000ULL );
+        t[ 1 ] = t[ 0 ];
         return ( utimensat( 0, fileName.Get(), t, 0 ) == 0 );
+    #else
+        #error Unknown platform
+    #endif
+}
+
+// SetFileLastWriteTimeToNow
+//------------------------------------------------------------------------------
+/*static*/ bool FileIO::SetFileLastWriteTimeToNow( const AString & fileName )
+{
+    #if defined( __WINDOWS__ )
+        const uint64_t fileTimeNow = Time::GetCurrentFileTime();
+        return SetFileLastWriteTime( fileName, fileTimeNow );
+    #elif defined( __APPLE__ )
+        // Use higher precision function if available
+        if ( gOSXHelper_utimensat.m_FuncPtr )
+        {
+            return ( (gOSXHelper_utimensat.m_FuncPtr)( 0, fileName.Get(), nullptr, 0 ) == 0 );
+        }
+    
+        // Fallback to regular low-resolution filetime setting
+        return ( utimes( fileName.Get(), nullptr ) == 0 );
+    #elif defined( __LINUX__ )
+        return ( utimensat( 0, fileName.Get(), nullptr, 0 ) == 0 );
     #else
         #error Unknown platform
     #endif
@@ -640,7 +776,7 @@
         return true;
     #elif defined( __LINUX__ ) || defined( __APPLE__ )
         struct stat s;
-        if ( stat( fileName, &s ) != 0 )
+        if ( lstat( fileName, &s ) != 0 )
         {
             return true; // can't even get the attributes, treat as not read only
         }
@@ -689,7 +825,7 @@
         return readOnly;
     #elif defined( __LINUX__ ) || defined( __APPLE__ )
         struct stat s;
-        if ( stat( fileName, &s ) != 0 )
+        if ( lstat( fileName, &s ) != 0 )
         {
             return false; // can't even get the attributes, treat as not read only
         }
@@ -785,6 +921,17 @@
         FindClose( hFind );
 
     #elif defined( __LINUX__ ) || defined( __APPLE__ )
+        // Special case symlinks.
+        struct stat stat_source;
+        if ( lstat( pathCopy.Get(), &stat_source ) != 0 )
+        {
+            return;
+        }
+        if ( S_ISLNK( stat_source.st_mode ) )
+        {
+            return;
+        }
+
         DIR * dir = opendir( pathCopy.Get() );
         if ( dir == nullptr )
         {
@@ -808,7 +955,7 @@
                 pathCopy += entry->d_name;
 
                 struct stat info;
-                VERIFY( stat( pathCopy.Get(), &info ) == 0 );
+                VERIFY( lstat( pathCopy.Get(), &info ) == 0 );
                 isDir = S_ISDIR( info.st_mode );
             }
 
@@ -886,6 +1033,17 @@
         FindClose( hFind );
 
     #elif defined( __LINUX__ ) || defined( __APPLE__ )
+        // Special case symlinks.
+        struct stat stat_source;
+        if ( lstat( pathCopy.Get(), &stat_source ) != 0 )
+        {
+            return;
+        }
+        if ( S_ISLNK( stat_source.st_mode ) )
+        {
+            return;
+        }
+
         DIR * dir = opendir( pathCopy.Get() );
         if ( dir == nullptr )
         {
@@ -909,7 +1067,7 @@
                 pathCopy += entry->d_name;
 
                 struct stat info;
-                VERIFY( stat( pathCopy.Get(), &info ) == 0 );
+                VERIFY( lstat( pathCopy.Get(), &info ) == 0 );
                 isDir = S_ISDIR( info.st_mode );
             }
 
@@ -934,12 +1092,11 @@
     #endif
 }
 
-
 // GetFilesRecurse
 //------------------------------------------------------------------------------
 /*static*/ void FileIO::GetFilesRecurseEx( AString & pathCopy,
-                                         const Array< AString > * patterns,
-                                         Array< FileInfo > * results )
+                                           const Array< AString > * patterns,
+                                           Array< FileInfo > * results )
 {
     const uint32_t baseLength = pathCopy.GetLength();
 
@@ -948,7 +1105,7 @@
 
         // recurse into directories
         WIN32_FIND_DATA findData;
-        HANDLE hFind = FindFirstFileEx( pathCopy.Get(), FindExInfoBasic, &findData, FindExSearchLimitToDirectories, nullptr, 0 );
+        HANDLE hFind = FindFirstFileEx( pathCopy.Get(), FindExInfoBasic, &findData, FindExSearchNameMatch, nullptr, 0 );
         if ( hFind == INVALID_HANDLE_VALUE)
         {
             return;
@@ -971,24 +1128,6 @@
                 pathCopy += findData.cFileName;
                 pathCopy += NATIVE_SLASH;
                 GetFilesRecurseEx( pathCopy, patterns, results );
-            }
-        }
-        while ( FindNextFile( hFind, &findData ) != 0 );
-        FindClose( hFind );
-
-        // do files in this directory
-        pathCopy.SetLength( baseLength );
-        pathCopy += '*';
-        hFind = FindFirstFileEx( pathCopy.Get(), FindExInfoBasic, &findData, FindExSearchNameMatch, nullptr, 0 );
-        if ( hFind == INVALID_HANDLE_VALUE)
-        {
-            return;
-        }
-
-        do
-        {
-            if ( findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY )
-            {
                 continue;
             }
 
@@ -1013,6 +1152,17 @@
         FindClose( hFind );
 
     #elif defined( __LINUX__ ) || defined( __APPLE__ )
+        // Special case symlinks.
+        struct stat stat_source;
+        if ( lstat( pathCopy.Get(), &stat_source ) != 0 )
+        {
+            return;
+        }
+        if ( S_ISLNK( stat_source.st_mode ) )
+        {
+            return;
+        }
+
         DIR * dir = opendir( pathCopy.Get() );
         if ( dir == nullptr )
         {
@@ -1036,7 +1186,7 @@
                 pathCopy += entry->d_name;
 
                 struct stat info;
-                VERIFY( stat( pathCopy.Get(), &info ) == 0 );
+                VERIFY( lstat( pathCopy.Get(), &info ) == 0 );
                 isDir = S_ISDIR( info.st_mode );
             }
 
@@ -1077,7 +1227,7 @@
 
                 // get additional info
                 struct stat info;
-                VERIFY( stat( pathCopy.Get(), &info ) == 0 );
+                VERIFY( lstat( pathCopy.Get(), &info ) == 0 );
                 newInfo.m_Attributes = info.st_mode;
                 #if defined( __APPLE__ )
                     newInfo.m_LastWriteTime = ( ( (uint64_t)info.st_mtimespec.tv_sec * 1000000000ULL ) + (uint64_t)info.st_mtimespec.tv_nsec );
@@ -1097,7 +1247,7 @@
 //------------------------------------------------------------------------------
 /*static*/ void FileIO::GetFilesNoRecurseEx( const char * path,
                                              const Array< AString > * patterns,
-                                           Array< FileInfo > * results )
+                                             Array< FileInfo > * results )
 {
     AStackString< 256 > pathCopy( path );
     PathUtils::EnsureTrailingSlash( pathCopy );
@@ -1142,6 +1292,17 @@
         FindClose( hFind );
 
     #elif defined( __LINUX__ ) || defined( __APPLE__ )
+        // Special case symlinks.
+        struct stat stat_source;
+        if ( lstat( pathCopy.Get(), &stat_source ) != 0 )
+        {
+            return;
+        }
+        if ( S_ISLNK( stat_source.st_mode ) )
+        {
+            return;
+        }
+
         DIR * dir = opendir( pathCopy.Get() );
         if ( dir == nullptr )
         {
@@ -1165,7 +1326,7 @@
                 pathCopy += entry->d_name;
 
                 struct stat info;
-                VERIFY( stat( pathCopy.Get(), &info ) == 0 );
+                VERIFY( lstat( pathCopy.Get(), &info ) == 0 );
                 isDir = S_ISDIR( info.st_mode );
             }
 
@@ -1192,7 +1353,7 @@
 
                 // get additional info
                 struct stat info;
-                VERIFY( stat( pathCopy.Get(), &info ) == 0 );
+                VERIFY( lstat( pathCopy.Get(), &info ) == 0 );
                 newInfo.m_Attributes = info.st_mode;
                 #if defined( __APPLE__ )
                     newInfo.m_LastWriteTime = ( ( (uint64_t)info.st_mtimespec.tv_sec * 1000000000ULL ) + (uint64_t)info.st_mtimespec.tv_nsec );
@@ -1211,7 +1372,9 @@
 // WorkAroundForWindowsFilePermissionProblem
 //------------------------------------------------------------------------------
 #if defined( __WINDOWS__ )
-    /*static*/ void FileIO::WorkAroundForWindowsFilePermissionProblem( const AString & fileName )
+    /*static*/ void FileIO::WorkAroundForWindowsFilePermissionProblem( const AString & fileName,
+                                                                       const uint32_t openMode,
+                                                                       const uint32_t timeoutSeconds )
     {
         // Sometimes after closing a file, subsequent operations on that file will
         // fail.  For example, trying to set the file time, or even another process
@@ -1225,18 +1388,17 @@
         // problem on the subsequent operation.
         FileStream f;
         Timer timer;
-        while ( f.Open( fileName.Get() ) == false )
+        while ( f.Open( fileName.Get(), openMode ) == false )
         {
             Thread::Sleep( 1 );
 
             // timeout so we don't get stuck in here forever
-            if ( timer.GetElapsed() > 1.0f )
+            if ( timer.GetElapsed() > (float)timeoutSeconds )
             {
                 ASSERT( false && "WorkAroundForWindowsFilePermissionProblem Failed!" );
                 return;
             }
         }
-        f.Close();
     }
 #endif
 

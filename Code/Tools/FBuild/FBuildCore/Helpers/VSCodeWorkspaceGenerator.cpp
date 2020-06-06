@@ -3,57 +3,11 @@
 
 // Includes
 //------------------------------------------------------------------------------
-#include "Tools/FBuild/FBuildCore/PrecompiledHeader.h"
-
 #include "VSCodeWorkspaceGenerator.h"
 
 #include "Tools/FBuild/FBuildCore/Graph/VSCodeProjectNode.h"
+#include "Tools/FBuild/FBuildCore/Graph/VSCodeWorkspaceNode.h"
 
-// CONSTRUCTOR (VSCodeWorkspaceFolder)
-//------------------------------------------------------------------------------
-VSCodeWorkspaceFolder::VSCodeWorkspaceFolder()
-{
-}
-
-// DESTRUCTOR
-//------------------------------------------------------------------------------
-VSCodeWorkspaceFolder::~VSCodeWorkspaceFolder() = default;
-
-// VSCodeWorkspaceFolder::Save
-/*static*/ void VSCodeWorkspaceFolder::Save( IOStream & stream, const Array< VSCodeWorkspaceFolder > & folders )
-{
-	uint32_t numFolders = (uint32_t)folders.GetSize();
-	stream.Write( numFolders );
-	for ( uint32_t i = 0; i < numFolders; ++i )
-	{
-		const VSCodeWorkspaceFolder & folder = folders[i];
-
-		stream.Write( folder.m_Path );
-		stream.Write( folder.m_Name );
-	}
-}
-
-// VSCodeWorkspaceFolder::Load
-//------------------------------------------------------------------------------
-/*static*/ bool VSCodeWorkspaceFolder::Load( IOStream & stream, Array< VSCodeWorkspaceFolder > & folders )
-{
-	ASSERT( folders.IsEmpty() );
-
-	uint32_t numFolders( 0 );
-	if ( !stream.Read( numFolders ) )
-	{
-		return false;
-	}
-	folders.SetSize( numFolders );
-	for ( uint32_t i = 0; i < numFolders; ++i )
-	{
-		VSCodeWorkspaceFolder & folder = folders[i];
-
-		if ( stream.Read( folder.m_Path ) == false ) { return false; }
-		if ( stream.Read( folder.m_Name ) == false ) { return false; }
-	}
-	return true;
-}
 
 // CONSTRUCTOR
 //------------------------------------------------------------------------------

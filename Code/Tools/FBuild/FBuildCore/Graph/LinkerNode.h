@@ -18,8 +18,8 @@ class LinkerNode : public FileNode
     REFLECT_NODE_DECLARE( LinkerNode )
 public:
     explicit LinkerNode();
-    bool Initialize( NodeGraph & nodeGraph, const BFFIterator & iter, const Function * function );
-    virtual ~LinkerNode();
+    virtual bool Initialize( NodeGraph & nodeGraph, const BFFToken * iter, const Function * function ) override;
+    virtual ~LinkerNode() override;
 
     enum Flag
     {
@@ -36,18 +36,20 @@ public:
 
     inline bool IsADLL() const { return GetFlag( LINK_FLAG_DLL ); }
 
-    virtual void Save( IOStream & stream ) const override;
-
     static uint32_t DetermineLinkerTypeFlags( const AString & linkerType, const AString & linkerName );
     static uint32_t DetermineFlags( const AString & linkerType, const AString & linkerName, const AString & args );
 
     static bool IsLinkerArg_MSVC( const AString & token, const char * arg );
     static bool IsStartOfLinkerArg_MSVC( const AString & token, const char * arg );
 
+    static bool IsStartOfLinkerArg( const AString & token, const char * arg );
+
 protected:
+    friend class TestLinker;
+
     virtual BuildResult DoBuild( Job * job ) override;
 
-    void DoPreLinkCleanup() const;
+    bool DoPreLinkCleanup() const;
 
     bool BuildArgs( Args & fullArgs ) const;
     void GetInputFiles( Args & fullArgs, const AString & pre, const AString & post ) const;
@@ -64,8 +66,8 @@ protected:
 
     void GetImportLibName( const AString & args, AString & importLibName ) const;
 
-    bool GetOtherLibraries( NodeGraph & nodeGraph, const BFFIterator & iter, const Function * function, const AString & args, Dependencies & otherLibraries, bool msvc ) const;
-    bool GetOtherLibrary( NodeGraph & nodeGraph, const BFFIterator & iter, const Function * function, Dependencies & libs, const AString & path, const AString & lib, bool & found ) const;
+    static bool GetOtherLibraries( NodeGraph & nodeGraph, const BFFToken * iter, const Function * function, const AString & args, Dependencies & otherLibraries, bool msvc );
+    static bool GetOtherLibrary( NodeGraph & nodeGraph, const BFFToken * iter, const Function * function, Dependencies & libs, const AString & path, const AString & lib, bool & found );
     static bool GetOtherLibsArg( const char * arg,
                                  Array< AString > & list,
                                  const AString * & it,
@@ -74,11 +76,11 @@ protected:
                                  bool isMSVC );
 
     static bool DependOnNode( NodeGraph & nodeGraph,
-                              const BFFIterator & iter,
+                              const BFFToken * iter,
                               const Function * function,
                               const AString & nodeName,
                               Dependencies & nodes );
-    static bool DependOnNode( const BFFIterator & iter,
+    static bool DependOnNode( const BFFToken * iter,
                               const Function * function,
                               Node * node,
                               Dependencies & nodes );
@@ -93,12 +95,14 @@ protected:
     AString             m_LinkerStampExe;
     AString             m_LinkerStampExeArgs;
     Array< AString >    m_PreBuildDependencyNames;
+    Array< AString >    m_Environment;
 
     // Internal State
     uint32_t            m_Flags                         = 0;
     uint32_t            m_AssemblyResourcesStartIndex   = 0;
     uint32_t            m_AssemblyResourcesNum          = 0;
     AString             m_ImportLibName;
+    mutable const char * m_EnvironmentString            = nullptr;
 };
 
 //------------------------------------------------------------------------------

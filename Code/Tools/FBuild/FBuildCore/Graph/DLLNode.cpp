@@ -3,8 +3,6 @@
 
 // Includes
 //------------------------------------------------------------------------------
-#include "Tools/FBuild/FBuildCore/PrecompiledHeader.h"
-
 #include "DLLNode.h"
 
 #include "Tools/FBuild/FBuildCore/FBuild.h"
@@ -61,22 +59,6 @@ void DLLNode::GetImportLibName( AString & importLibName ) const
         // Assume we link with stub_weak library (loose linking)
         importLibName += "_stub_weak.a";
     }
-}
-
-// Load
-//------------------------------------------------------------------------------
-/*static*/ Node * DLLNode::Load( NodeGraph & nodeGraph, IOStream & stream )
-{
-    NODE_LOAD( AStackString<>, name );
-
-    DLLNode * node = nodeGraph.CreateDLLNode( name );
-
-    if ( node->Deserialize( nodeGraph, stream ) == false )
-    {
-        return nullptr;
-    }
-
-    return node;
 }
 
 //------------------------------------------------------------------------------

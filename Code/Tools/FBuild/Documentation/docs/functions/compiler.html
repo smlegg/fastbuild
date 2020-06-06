@@ -1,14 +1,29 @@
 <!DOCTYPE html>
 <link href="../style.css" rel="stylesheet" type="text/css">
-<script type="text/javascript" src="../common.js"></script>
 
-<html>
+<html lang="en-US">
 <head>
+<meta charset="utf-8">
 <link rel="shortcut icon" href="../../favicon.ico">
 <title>FASTBuild - Function Reference - Compiler</title>
 </head>
 <body>
-  <script>generateHeaderParent()</script>
+	<div class='outer'>
+        <div>
+            <div class='logobanner'>
+                <a href='../home.html'><img src='../img/logo.png' style='position:relative;'/></a>
+	            <div class='contact'><a href='../contact.html' class='othernav'>Contact</a> &nbsp; | &nbsp; <a href='../license.html' class='othernav'>License</a></div>
+	        </div>
+	    </div>
+	    <div id='main'>
+	        <div class='navbar'>
+	            <a href='../home.html' class='lnavbutton'>Home</a><div class='navbuttonbreak'><div class='navbuttonbreakinner'></div></div>
+	            <a href='../features.html' class='navbutton'>Features</a><div class='navbuttonbreak'><div class='navbuttonbreakinner'></div></div>
+	            <a href='../status.html' class='navbutton'>Status</a><div class='navbuttonbreak'><div class='navbuttonbreakinner'></div></div>
+	            <a href='../documentation.html' class='navbutton'>Documentation</a><div class='navbuttongap'></div>
+	            <a href='../download.html' class='rnavbutton'><b>Download</b></a>
+	        </div>
+	        <div class='inner'>
 
 <h1>Compiler</h1>
     <div id='compiler' class='newsitemheader'>
@@ -19,7 +34,7 @@
 Describes a compiler and specifies how to interact with the compiler process for dependency tracking,
 distribution, caching and more.
       </p>
-<div class='code'>Compiler( 'name' )              // (optional) Alias
+<div class='code'>Compiler( 'name' )              // Alias
 {
   .Executable                   // Primary compiler executable
   .ExtraFiles                   // (optional) Additional files (usually dlls) required by the compiler.
@@ -32,6 +47,12 @@ distribution, caching and more.
   .CustomEnvironmentVariables   // (optional) Environment variables to set on remote host
   .ClangRewriteIncludes         // (optional) Use Clang's -frewrite-includes option when preprocessing (default: true)
   .VS2012EnumBugFix             // (optional) Enable work-around for bug in VS2012 compiler (default: false)
+  .Environment                  // (optional) Environment variables to use for local build
+  
+  // Temporary Options
+  .UseLightCache_Experimental   // (optional) Enabled experimental "light" caching mode (default: false)
+  .UseRelativePaths_Experimental// (optional) Enabled experimental relative path use (default: false)
+  .ClangFixupUnity_Disable      // (optional) Disable preprocessor fixup for Unity files (default: false)
 }
 </div>
     </div>
@@ -119,7 +140,8 @@ Compiler( 'Test' )
         <tr><td>greenhills-wiiu</td><td>GreenHills compiler for the Wii U</td></tr>
         <tr><td>cuda-nvcc</td><td>NVIDIA's CUDA compiler</td></tr>
         <tr><td>qt-rcc</td><td>Qt's resource compiler</td></tr>
-        <tr><td>vbcc</td><td>vbcc compiler</td></tr>        
+        <tr><td>vbcc</td><td>vbcc compiler</td></tr>
+        <tr><td>orbis-wave-psslc</td><td>orbis wave psslc shader compiler</td></tr>
         <tr><td>&nbsp;</td><td></td></tr>
         <tr><th>Value</th><th>Notes</th></tr>
         <tr><td>custom</td><td>Any custom compiler. <font color=red>NOTE:</font> Only primary input and output dependencies will be tracked. No additional
@@ -192,28 +214,81 @@ This results in very unintuitive compile errors.</p>
 	This work-around may be impractical if a large number of enums are affected, or if the enum(s) originate in system headers or
 	external code. In those cases the .VS2012EnumBugFix option can be enabled to insert the
 	additional whitespace at build-time.</p>
+
+  	<p><hr></p>
+
+	<p><b>.Environment</b> - String or ArrayOfStrings - (Optional)</p>
+	<p>When set, overrides the environment for local compiles</p>
+   <p>This allows you to have a different environment per compiler</p>
+
 </div>
 
 
 <div id='compiler' class='newsitemheader'>Examples</div>
     <div class='newsitembody'>
 
-<b>Clang</b>
-<div class='code'>// Clang for Windows
-Compiler( 'Compiler-x86Clang' )
+<b>MSVC - 2019 (v16.5.1)</b>
+<div class='code'>// VisualStudio 2019 x64 Compiler
+.VS2017_BasePath         = 'C:\Program Files (x86)\Microsoft Visual Studio\2017\2017\Community'
+.VS2017_Version          = '14.16.27023'
+Compiler( 'Compiler-VS2017-x64' )
 {
-  .Executable = '$ClangForWindowsBasePath$\clang++.exe'
+    .Root       = '$VS2019_BasePath$/VC/Tools/MSVC/$VS2019_Version$/bin/Hostx64/x64'
+    .Executable = '$Root$/cl.exe'
+    .ExtraFiles = { '$Root$/c1.dll'
+                    '$Root$/c1xx.dll',
+                    '$Root$/c2.dll',
+                    '$Root$/atlprov.dll', // Only needed if using ATL
+                    '$Root$/msobj140.dll'
+                    '$Root$/mspdb140.dll'
+                    '$Root$/mspdbcore.dll'
+                    '$Root$/mspdbsrv.exe'
+                    '$Root$/mspft140.dll'
+                    '$Root$/msvcp140.dll'
+                    '$Root$/tbbmalloc.dll' // Required as of 16.2 (14.22.27905)
+                    '$Root$/vcruntime140.dll'
+                    '$Root$/vcruntime140_1.dll' // Required as of 16.5.1 (14.25.28610)
+                    '$Root$/1033/clui.dll'
+                    '$Root$/1033/mspft140ui.dll' // Localized messages for static analysis
+                  }
 }</div>
+
+<b>MSVC - 2017</b>
+<div class='code'>// VisualStudio 2017 x64 Compiler
+.VS2017_BasePath         = 'C:\Program Files (x86)\Microsoft Visual Studio\2017\2017\Community'
+.VS2017_Version          = '14.16.27023'
+Compiler( 'Compiler-VS2017-x64' )
+{
+    .Root       = '$VS2017_BasePath$\VC\Tools\MSVC\$VS2017_Version$\bin\Hostx64\x64'
+    .Executable = '$Root$\cl.exe'
+    .ExtraFiles = {
+                    '$Root$\c1.dll'
+                    '$Root$\c1xx.dll',
+                    '$Root$\c2.dll',
+                    '$Root$\atlprov.dll', // Only needed if using ATL
+                    '$Root$\msobj140.dll'
+                    '$Root$\mspdb140.dll'
+                    '$Root$\mspdbcore.dll'
+                    '$Root$\mspdbsrv.exe'
+                    '$Root$\mspft140.dll'
+                    '$Root$\msvcp140.dll'
+                    '$Root$\vcruntime140.dll'
+                    '$Root$\1033/clui.dll'
+                  }
+}</div>
+
 <b>MSVC - 2013</b>
 <div class='code'>// VisualStudio 2013 x86 Compiler
 Compiler( 'Compiler-x86' )
 {
   .Executable = '$VSBasePath$\VC\bin\cl.exe'
-  .ExtraFiles = { '$VSBasePath$\VC\bin\c1.dll'
+  .ExtraFiles = {
+                  '$VSBasePath$\VC\bin\c1.dll'
                   '$VSBasePath$\VC\bin\c1ast.dll',
                   '$VSBasePath$\VC\bin\c1xx.dll',
                   '$VSBasePath$\VC\bin\c1xxast.dll',
                   '$VSBasePath$\VC\bin\c2.dll',
+                  '$VSBasePath$\VC\bin\atlprov.dll', // Only needed if using ATL
                   '$VSBasePath$\VC\bin\msobj120.dll'
                   '$VSBasePath$\VC\bin\mspdb120.dll'
                   '$VSBasePath$\VC\bin\mspdbcore.dll'
@@ -224,22 +299,11 @@ Compiler( 'Compiler-x86' )
                   '$VSBasePath$\VC\redist\x86\Microsoft.VC120.CRT\vccorlib120.dll'
                 }
 }</div>
-<b>MSVC - 2010</b>
-<div class='code'>// VisualStudio 2010 x86 Compiler
-Compiler( "Compiler-x86" )
+<b>Clang</b>
+<div class='code'>// Clang for Windows
+Compiler( 'Compiler-x86Clang' )
 {
-  .Executable = '$VSBasePath$\VC\bin\cl.exe'
-  .ExtraFiles = { '$VSBasePath$\VC\bin\c1.dll'
-                  '$VSBasePath$\VC\bin\c1xx.dll'
-                  '$VSBasePath$\VC\bin\c2.dll'
-                  '$VSBasePath$\Common7\IDE\mspdb100.dll'
-                  '$VSBasePath$\Common7\IDE\msobj100.dll'
-                  '$VSBasePath$\Common7\IDE\mspdbsrv.exe'
-                  '$VSBasePath$\Common7\IDE\mspdbcore.dll'
-                  '$VSBasePath$\VC\bin\1033\clui.dll'
-                  '$VSBasePath$\VC\redist\x86\Microsoft.VC100.CRT\msvcp100.dll'
-                  '$VSBasePath$\VC\redist\x86\Microsoft.VC100.CRT\msvcr100.dll'
-    }
+  .Executable = '$ClangForWindowsBasePath$\clang++.exe'
 }</div>
 <b>Intel</b>
 <div class='code'>// Intel 2015 Update 4 x64 Compiler
@@ -277,6 +341,44 @@ Compiler( 'Compiler-x64Intel' )
 }</div>
 </div>
 
-  <script>generateFooter()</script>
+<!-- 
+	Temporary Options
+-->	
+<div id='alias' class='newsitemheader'>Temporary Options</div>
+
+<div class='newsitembody'>
+	<p><b>.UseLightCache_Experimental</b> - Boolean - (Optional)</p>
+    <p>When set, activates "Light Caching" mode. Light Caching mode avoids using the compiler's
+    preprocessor for cache lookups, instead allowing FASTBuild to parse the files itself to gather the
+    required information. This parsing is significantly faster than for each file and additionally allows
+    FASTBuild to eliminate redundant file parsing between object files, further accelerating cache lookups.
+    <p><font color=red>NOTE:</font> This feature should be used with caution. While there are no known issues (it self disables
+    when known to not work - see other notes) it should be considered experimental.</p>
+    <p><font color=red>NOTE:</font> For now, Light Caching can only be used with the MSVC compiler. Support will be extended
+    to other compilers in future versions.</p>
+    <p><font color=red>NOTE:</font> Light Caching does not support macros using for include paths (i.e. "#include MY_INCLUDE_HEADER")
+    Support for this will be added in future versions.</p>
+
+  	<p><hr></p>
+
+	<p><b>.UseRelativePaths_Experimental</b> - Boolean - (Optional)</p>
+	<p>Use relative paths where possible. This is an experiment to lay a possible foundation for path-independent
+	caching.</p>
+
+    <p><font color=red>NOTE:</font> This feature is incomplete and should not be used.</p>
+
+  	<p><hr></p>
+
+	<p><b>.ClangFixupUnity_Disable</b> - Boolean - (Optional)</p>
+	<p>Disable preprocessor fixup for Unity files (default: false).</p> 
+	<p>When compiling Unity files with Clang, FASTBuild will modify the preprocessed output so that
+	the files included by the Unity are considered to be the top level file(s), instead of the Unity file. This
+	makes Clang's warning behavior (particularly for static analysis) consistent between Unity and non-Unity
+	compilation.</p>
+	<p>This temporary option disables this behavior and is provided as a safety mechanism incase there are
+	unforseen problems with this feature. This toggle is expected to be removed in v1.01.</p>
+</div>
+
+    </div><div class='footer'>&copy; 2012-2020 Franta Fulin</div></div></div>
 </body>
 </html>

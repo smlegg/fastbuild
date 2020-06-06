@@ -3,39 +3,106 @@
 
 // Includes
 //------------------------------------------------------------------------------
-#include "Tools/FBuild/FBuildCore/PrecompiledHeader.h"
-
 #include "VSCodeWorkspaceNode.h"
 
+#include "Tools/FBuild/FBuildCore/Error.h"
 #include "Tools/FBuild/FBuildCore/Graph/NodeGraph.h"
 #include "Tools/FBuild/FBuildCore/Graph/VSCodeProjectNode.h"
 #include "Tools/FBuild/FBuildCore/Helpers/VSCodeWorkspaceGenerator.h"
+#include "Tools/FBuild/FBuildCore/Graph/AliasNode.h"
+
+// Reflection
+//------------------------------------------------------------------------------
+REFLECT_STRUCT_BEGIN_BASE( VSCodeWorkspaceFolder )
+	REFLECT( m_Path, "Path", MetaPath() )
+	REFLECT( m_Name, "Name", MetaOptional() )
+REFLECT_END( VSCodeWorkspaceFolder )
+
+REFLECT_NODE_BEGIN( VSCodeWorkspaceNode, Node, MetaName("WorkspaceOutput") + MetaFile() )
+	REFLECT_ARRAY( m_Projects, "WorkspaceProjects", MetaNone() )
+	REFLECT_ARRAY_OF_STRUCT( m_Folders, "WorkspaceFolders", VSCodeWorkspaceFolder, MetaNone() )
+REFLECT_END( VSCodeWorkspaceNode )
+
+
+// ResolveVSCodeProjectRecurse
+//------------------------------------------------------------------------------
+static VSCodeProjectNode * ResolveVSCodeProjectRecurse( Node * node )
+{
+	if ( node == nullptr )
+	{
+		return nullptr;
+	}
+
+	// search inside targets if this is an alias
+	if ( node->GetType() == Node::ALIAS_NODE )
+	{
+		AliasNode * const alias = node->CastTo< AliasNode >();
+		const Dependencies & targets = alias->GetAliasedNodes();
+
+		const Dependency * const end = targets.End();
+		for ( const Dependency * it = targets.Begin(); it != end; ++it )
+		{
+			VSCodeProjectNode *result = ResolveVSCodeProjectRecurse( it->GetNode() );
+			if ( result != nullptr )
+			{
+				return result;
+			}
+		}
+	}
+
+	// check that this a vcxproject
+	if ( node->GetType() != Node::VSCODEPROJECT_NODE )
+	{
+		// don't know how to handle this type of node
+		return nullptr;
+	}
+
+	return node->CastTo< VSCodeProjectNode >();
+}
+
+// CONSTRUCTOR (VSCodeWorkspaceFolder)
+//------------------------------------------------------------------------------
+VSCodeWorkspaceFolder::VSCodeWorkspaceFolder()
+{
+}
+
+// DESTRUCTOR
+//------------------------------------------------------------------------------
+VSCodeWorkspaceFolder::~VSCodeWorkspaceFolder() = default;
 
 // CONSTRUCTOR
 //------------------------------------------------------------------------------
-VSCodeWorkspaceNode::VSCodeWorkspaceNode( const AString & workspaceOutput,
-										  const Array< VSCodeProjectNode * > & projects,
-										  const Array< VSCodeWorkspaceFolder> & folders )
-: FileNode( workspaceOutput, Node::FLAG_NONE )
-, m_Folders( folders )
+VSCodeWorkspaceNode::VSCodeWorkspaceNode()
+: FileNode( AString::GetEmpty(), Node::FLAG_NONE )
 {
 	m_LastBuildTimeMs = 100; // higher default than a file node
 	m_Type = Node::VSCODEWORKSPACE_NODE;
-
-	// depend on the input nodes
-	for ( VSCodeProjectNode * project : projects )
-	{
-		m_StaticDependencies.Append( Dependency( project ) );
-	}
 }
 
 // DESTRUCTOR
 //------------------------------------------------------------------------------
 VSCodeWorkspaceNode::~VSCodeWorkspaceNode() = default;
 
+// Initialize
+//------------------------------------------------------------------------------
+/*virtual*/ bool VSCodeWorkspaceNode::Initialize( NodeGraph& nodeGraph, const BFFToken * iter, const Function * function )
+{
+	ResolveProjects( nodeGraph, iter, function );
+
+	// depend on the input nodes
+	for ( VSCodeProjectNode * project : m_ProjectNodes )
+	{
+		m_StaticDependencies.Append( Dependency( project ) );
+	}
+
+	return true;
+}
+
+
+
 // DoBuild
 //------------------------------------------------------------------------------
-/*virtual*/ Node::BuildResult VSCodeWorkspaceNode::DoBuild( Job * UNUSED( job ) )
+/*virtual*/ Node::BuildResult VSCodeWorkspaceNode::DoBuild( Job * )
 {
 	VSCodeWorkspaceGenerator g;
 
@@ -56,34 +123,43 @@ VSCodeWorkspaceNode::~VSCodeWorkspaceNode() = default;
 	return NODE_RESULT_OK;
 }
 
-// Load
+// PostLoad
 //------------------------------------------------------------------------------
-/*static*/ Node * VSCodeWorkspaceNode::Load( NodeGraph & nodeGraph, IOStream & stream )
+/*virtual*/ void VSCodeWorkspaceNode::PostLoad( NodeGraph & nodeGraph )
 {
-	NODE_LOAD( AStackString<>, name );
-	NODE_LOAD_DEPS( 1, staticDeps );
-
-	Array< VSCodeProjectNode * > projects( staticDeps.GetSize(), false );
-	const Dependency * const end = staticDeps.End();
-	for ( const Dependency * it = staticDeps.Begin(); it != end; ++it )
-	{
-		projects.Append( it->GetNode()->CastTo< VSCodeProjectNode >() );
-	}
-
-	Array< VSCodeWorkspaceFolder > folders;
-	VSCodeWorkspaceFolder::Load( stream, folders );
-
-	VSCodeWorkspaceNode * n = nodeGraph.CreateVSCodeWorkspaceNode( name,
-																   projects,
-																   folders );
-	return n;
+    ResolveProjects( nodeGraph );
 }
 
-// Save
+// VSCodeWorkspaceNode::ResolveTargets
 //------------------------------------------------------------------------------
-/*virtual*/ void VSCodeWorkspaceNode::Save( IOStream & stream ) const
+/*static*/ bool VSCodeWorkspaceNode::ResolveProjects( NodeGraph & nodeGraph,
+                                                      const BFFToken * iter,
+                                                      const Function * function )
 {
-	NODE_SAVE( m_Name );
-	NODE_SAVE_DEPS( m_StaticDependencies );
-	VSCodeWorkspaceFolder::Save( stream, m_Folders );
+    // Must provide iter and function, or neither
+    ASSERT( ( ( iter == nullptr ) && ( function == nullptr ) ) ||
+            ( iter && function ) );
+
+	m_ProjectNodes.Clear();
+    for ( auto & projectName : m_Projects )
+    {
+		Node * node = nodeGraph.FindNode( projectName );
+		if ( node == nullptr )
+		{
+			if (iter)
+			{
+				Error::Error_1104_TargetNotDefined( iter, function, ".WorkspaceProjects", projectName );
+			}
+		}
+
+		VSCodeProjectNode * project = ResolveVSCodeProjectRecurse( node );
+		if ( project )
+		{
+			m_ProjectNodes.Append( project );
+    	} else
+		{
+			Error::Error_1005_UnsupportedNodeType( iter, function, ".WorkspaceProjects", node->GetName(), node->GetType() );
+		}
+}
+    return true;
 }

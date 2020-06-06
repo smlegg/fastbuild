@@ -35,15 +35,15 @@ public:
 template < class T, class COMPARE >
 void ShellSort( T * begin, T * end, const COMPARE & compare )
 {
-    size_t numItems = end - begin;
+    size_t numItems = (size_t)( end - begin );
     size_t increment = 3;
     while ( increment > 0 )
     {
-        for ( size_t i=0; i < numItems; i++ )
+        for ( size_t i = 0; i < numItems; i++ )
         {
             size_t j = i;
             T temp( begin[ i ] );
-            while ( ( j >= increment ) && ( compare( temp, begin[ j - increment ]  ) ) )
+            while ( ( j >= increment ) && ( compare( temp, begin[ j - increment ] ) ) )
             {
                 begin[ j ] = begin[ j - increment ];
                 j = j - increment;
@@ -52,7 +52,7 @@ void ShellSort( T * begin, T * end, const COMPARE & compare )
         }
         if ( increment / 2 != 0 )
         {
-            increment = increment / 2 ;
+            increment = increment / 2;
         }
         else if ( increment == 1 )
         {

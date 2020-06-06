@@ -3,15 +3,13 @@
 
 // Includes
 //------------------------------------------------------------------------------
-#include "Core/PrecompiledHeader.h"
-
 #include "Semaphore.h"
 
 // Core
 #include "Core/Env/Assert.h"
 
 #if defined( __WINDOWS__ )
-    #include <windows.h>
+    #include "Core/Env/WindowsHeader.h"
 #endif
 #if defined( __LINUX__ )
     #include <errno.h>
@@ -29,7 +27,7 @@ Semaphore::Semaphore()
         m_Semaphore = CreateSemaphore( nullptr, 0, 0x7FFFFFFF, nullptr );
         ASSERT( m_Semaphore );
     #elif defined( __APPLE__ )
-        m_Semaphore = dispatch_semaphore_create(0);
+        m_Semaphore = dispatch_semaphore_create( 0 );
         ASSERT( m_Semaphore );
     #elif defined( __LINUX__ )
         VERIFY( sem_init( &m_Semaphore, 0, 0 ) == 0 );
@@ -68,9 +66,9 @@ void Semaphore::Signal( uint32_t num )
 {
     ASSERT( num ); // not valid to call with 0
     #if defined( __WINDOWS__ )
-        VERIFY( ReleaseSemaphore( m_Semaphore, (DWORD)num, nullptr ) );
+        VERIFY( ReleaseSemaphore( m_Semaphore, (LONG)num, nullptr ) );
     #else
-        for ( size_t i=0; i<num; ++i )
+        for ( size_t i = 0; i < num; ++i )
         {
             Signal();
         }

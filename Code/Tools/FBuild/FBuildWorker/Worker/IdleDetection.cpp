@@ -14,7 +14,7 @@
 
 // system
 #if defined( __WINDOWS__ )
-    #include <windows.h>
+    #include "Core/Env/WindowsHeader.h"
     #include <tlhelp32.h>
 #endif
 #if defined( __LINUX__ )
@@ -22,10 +22,12 @@
     #include <stdlib.h>
     #include <sys/stat.h>
 #endif
+#if defined( __OSX__ )
+    #include <mach/mach_host.h>
+#endif
 
 // Defines
 //------------------------------------------------------------------------------
-#define IDLE_DETECTION_THRESHOLD_PERCENT ( 20.0f )
 #define IDLE_CHECK_DELAY_SECONDS ( 0.1f )
 
 // CONSTRUCTOR
@@ -34,7 +36,10 @@ IdleDetection::IdleDetection()
     : m_CPUUsageFASTBuild( 0.0f )
     , m_CPUUsageTotal( 0.0f )
     , m_IsIdle( false )
+    , m_IsIdleFloat( 0.0f )
+    , m_IsIdleCurrent( 0.0f )
     , m_IdleSmoother( 0 )
+    , m_IdleFloatSmoother( 0 )
     , m_ProcessesInOurHierarchy( 32, true )
     , m_LastTimeIdle( 0 )
     , m_LastTimeBusy( 0 )
@@ -55,10 +60,10 @@ IdleDetection::~IdleDetection() = default;
 
 // Update
 //------------------------------------------------------------------------------
-void IdleDetection::Update()
+void IdleDetection::Update( uint32_t idleThresholdPercent )
 {
     // apply smoothing based on current "idle" state
-    if ( IsIdleInternal() )
+    if ( IsIdleInternal( idleThresholdPercent, m_IsIdleCurrent ) )
     {
         ++m_IdleSmoother;
     }
@@ -66,7 +71,7 @@ void IdleDetection::Update()
     {
         m_IdleSmoother -= 2; // become non-idle more quickly than we become idle
     }
-    m_IdleSmoother = Math::Clamp(m_IdleSmoother, 0, 50);
+    m_IdleSmoother = Math::Clamp( m_IdleSmoother, 0, 10 );
 
     // change state only when at extreme of either end of scale
     if ( m_IdleSmoother == 10 ) // 5 secs (called every ~500ms)
@@ -77,11 +82,28 @@ void IdleDetection::Update()
     {
         m_IsIdle = false;
     }
+
+    // separate smoothing for idle float values. They behave differently.
+    if ( m_IsIdleCurrent >= m_IsIdleFloat )
+    {
+        ++m_IdleFloatSmoother;
+    }
+    else
+    {
+        m_IdleFloatSmoother -= 2; // become non-idle more quickly than we become idle
+    }
+    m_IdleFloatSmoother = Math::Clamp( m_IdleFloatSmoother, 0, 10 );
+
+    // change state only when at extreme of either end of scale
+    if ( ( m_IdleFloatSmoother == 10 ) || ( m_IdleFloatSmoother == 0 ) ) // 5 secs (called every ~500ms)
+    {
+        m_IsIdleFloat = m_IsIdleCurrent;
+    }
 }
 
-//
+// IsIdleInternal
 //------------------------------------------------------------------------------
-bool IdleDetection::IsIdleInternal()
+bool IdleDetection::IsIdleInternal( uint32_t idleThresholdPercent, float & idleCurrent )
 {
     // determine total cpu time (including idle)
     uint64_t systemTime = 0;
@@ -93,10 +115,10 @@ bool IdleDetection::IsIdleInternal()
 
         if ( m_LastTimeBusy > 0 )
         {
-            uint64_t idleTimeDelta = (idleTime - m_LastTimeIdle);
+            uint64_t idleTimeDelta = ( idleTime - m_LastTimeIdle );
             uint64_t usedTimeDelta = ( ( userTime + kernTime ) - m_LastTimeBusy );
-            systemTime = (idleTimeDelta + usedTimeDelta);
-            m_CPUUsageTotal = (float)((double)usedTimeDelta / (double)systemTime) * 100.0f;
+            systemTime = ( idleTimeDelta + usedTimeDelta );
+            m_CPUUsageTotal = (float)( (double)usedTimeDelta / (double)systemTime ) * 100.0f;
         }
         m_LastTimeIdle = ( idleTime );
         m_LastTimeBusy = ( userTime + kernTime );
@@ -104,34 +126,35 @@ bool IdleDetection::IsIdleInternal()
 
     // if the total CPU time is below the idle theshold, we don't need to
     // check to know acurately what the cpu use of FASTBuild is
-    if ( m_CPUUsageTotal < IDLE_DETECTION_THRESHOLD_PERCENT )
+    if ( m_CPUUsageTotal < idleThresholdPercent )
     {
+        idleCurrent = 1.0f;
         return true;
     }
 
     // reduce check frequency
-    if (m_Timer.GetElapsed() > IDLE_CHECK_DELAY_SECONDS )
+    if ( m_Timer.GetElapsed() > IDLE_CHECK_DELAY_SECONDS )
     {
         // iterate all processes
         UpdateProcessList();
 
         // accumulate cpu usage for processes we care about
-        if (systemTime) // skip first update
+        if ( systemTime ) // skip first update
         {
-            float totalPerc(0.0f);
+            float totalPerc( 0.0f );
 
-            for ( ProcessInfo & pi : m_ProcessesInOurHierarchy)
+            for ( ProcessInfo & pi : m_ProcessesInOurHierarchy )
             {
                 uint64_t kernTime = 0;
                 uint64_t userTime = 0;
                 GetProcessTime( pi, kernTime, userTime );
 
-                const uint64_t totalTime = (userTime + kernTime);
+                const uint64_t totalTime = ( userTime + kernTime );
                 const uint64_t lastTime = pi.m_LastTime;
-                if (lastTime != 0) // ignore first update
+                if ( lastTime != 0 ) // ignore first update
                 {
-                    const uint64_t timeSpent = (totalTime - lastTime);
-                    float perc = (float)((double)timeSpent / (double)systemTime) * 100.0f;
+                    const uint64_t timeSpent = ( totalTime - lastTime );
+                    float perc = (float)( (double)timeSpent / (double)systemTime ) * 100.0f;
                     totalPerc += perc;
                 }
                 pi.m_LastTime = totalTime;
@@ -143,7 +166,8 @@ bool IdleDetection::IsIdleInternal()
         m_Timer.Start();
     }
 
-    return ( ( m_CPUUsageTotal - m_CPUUsageFASTBuild ) < IDLE_DETECTION_THRESHOLD_PERCENT );
+    idleCurrent = ( 1.0f - ( ( m_CPUUsageTotal - m_CPUUsageFASTBuild ) * 0.01f ) );
+    return ( ( m_CPUUsageTotal - m_CPUUsageFASTBuild ) < idleThresholdPercent );
 }
 
 // GetSystemTotalCPUUsage
@@ -154,16 +178,18 @@ bool IdleDetection::IsIdleInternal()
 {
     #if defined( __WINDOWS__ )
         FILETIME ftIdle, ftKern, ftUser;
-        VERIFY(::GetSystemTimes(&ftIdle, &ftKern, &ftUser));
-        outIdleTime = ((uint64_t)ftIdle.dwHighDateTime << 32) | (uint64_t)ftIdle.dwLowDateTime;
-        outKernTime = ((uint64_t)ftKern.dwHighDateTime << 32) | (uint64_t)ftKern.dwLowDateTime;
-        outUserTime = ((uint64_t)ftUser.dwHighDateTime << 32) | (uint64_t)ftUser.dwLowDateTime;
+        VERIFY( ::GetSystemTimes( &ftIdle, &ftKern, &ftUser ) );
+        outIdleTime = ( (uint64_t)ftIdle.dwHighDateTime << 32 ) | (uint64_t)ftIdle.dwLowDateTime;
+        outKernTime = ( (uint64_t)ftKern.dwHighDateTime << 32 ) | (uint64_t)ftKern.dwLowDateTime;
+        outUserTime = ( (uint64_t)ftUser.dwHighDateTime << 32 ) | (uint64_t)ftUser.dwLowDateTime;
         outKernTime -= outIdleTime; // Kern time includes Idle, but we don't want that
     #elif defined( __OSX__ )
-        // TODO:OSX Implement GetSystemTotalCPUUsage
-        outIdleTime = 0;
-        outKernTime = 0;
-        outUserTime = 0;
+        host_cpu_load_info_data_t cpuInfo;
+        mach_msg_type_number_t count = HOST_CPU_LOAD_INFO_COUNT;
+        VERIFY( host_statistics( mach_host_self(), HOST_CPU_LOAD_INFO, (host_info_t)&cpuInfo, &count ) == KERN_SUCCESS );
+        outIdleTime = cpuInfo.cpu_ticks[ CPU_STATE_IDLE ];
+        outKernTime = cpuInfo.cpu_ticks[ CPU_STATE_SYSTEM ];
+        outUserTime = cpuInfo.cpu_ticks[ CPU_STATE_USER ];
     #elif defined( __LINUX__ )
         // Read first line of /proc/stat
         AStackString< 1024 > procStat;
@@ -174,7 +200,7 @@ bool IdleDetection::IsIdleInternal()
         {
             Array< uint32_t > values( 10, true );
             const char * pos = procStat.Get() + 4; // skip "cpu "
-            for (;;)
+            for ( ;; )
             {
                 char * end;
                 values.Append( strtoul( pos, &end, 10 ) );
@@ -418,13 +444,19 @@ void IdleDetection::UpdateProcessList()
     {
         // never prune first process (this process)
         const size_t numProcesses = m_ProcessesInOurHierarchy.GetSize();
-        for ( size_t i = (numProcesses - 1); i > 0; --i )
+        for ( size_t i = ( numProcesses - 1 ); i > 0; --i )
         {
-            if ( m_ProcessesInOurHierarchy[i].m_AliveValue != sAliveValue )
+            if ( m_ProcessesInOurHierarchy[ i ].m_AliveValue != sAliveValue )
             {
                 // dead process
                 #if defined( __WINDOWS__ )
+                    #if ( _MSC_VER <= 1900 ) // Avoid VS2015 false positive
+                        PRAGMA_DISABLE_PUSH_MSVC( 6001 ) // Using uninitialized memory
+                    #endif
                     CloseHandle( m_ProcessesInOurHierarchy[ i ].m_ProcessHandle );
+                    #if ( _MSC_VER <= 1900 ) // Avoid VS2015 false positive
+                        PRAGMA_DISABLE_POP_MSVC // 6001
+                    #endif
                 #endif
                 m_ProcessesInOurHierarchy.EraseIndex( i );
             }
