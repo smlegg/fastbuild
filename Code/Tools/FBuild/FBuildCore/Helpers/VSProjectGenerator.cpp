@@ -112,6 +112,32 @@ const AString & VSProjectGenerator::GenerateVCXProj( const AString & projectFile
     Write( "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" );
     Write( "<Project DefaultTargets=\"Build\" ToolsVersion=\"15.0\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n" );
 
+    Array<AString> AllConfigurations;
+    Array<AString> AllPlatforms;
+    for ( const VSProjectConfig * cIt = configs.Begin(); cIt != configs.End(); ++cIt )
+    {
+        if (!AllConfigurations.Find(cIt->m_Config))
+        {
+            AllConfigurations.Append(cIt->m_Config);
+        }
+        if (!AllPlatforms.Find(cIt->m_Platform))
+        {
+            AllPlatforms.Append(cIt->m_Platform);
+        }
+    }
+    size_t NumPlatforms = AllPlatforms.GetSize();
+    size_t NumConfigs = AllConfigurations.GetSize();
+    Array<Array<bool>> PlatformConfigExists;
+    PlatformConfigExists.SetSize(NumPlatforms);
+    for (size_t PlatformIndex = 0; PlatformIndex < NumPlatforms; PlatformIndex++)
+    {
+        PlatformConfigExists[PlatformIndex].SetSize(NumConfigs);
+        for (size_t ConfigIndex = 0; ConfigIndex < NumConfigs; ConfigIndex++)
+        {
+            PlatformConfigExists[PlatformIndex][ConfigIndex] = false;
+        }
+    }
+
     // Project Configurations
     {
         Write( "  <ItemGroup Label=\"ProjectConfigurations\">\n" );
@@ -122,7 +148,43 @@ const AString & VSProjectGenerator::GenerateVCXProj( const AString & projectFile
             WriteF("      <Configuration>%s</Configuration>\n", cIt->m_Config.Get() );
             WriteF("      <Platform>%s</Platform>\n", cIt->m_Platform.Get() );
             Write( "    </ProjectConfiguration>\n" );
+
+            size_t PlatformIndex;
+            for (PlatformIndex = 0; PlatformIndex < NumPlatforms; PlatformIndex++)
+            {
+                if (AllPlatforms[PlatformIndex] == cIt->m_Platform)
+                {
+                    break;
+                }
+            }
+
+            size_t ConfigIndex;
+            for (ConfigIndex = 0; ConfigIndex < NumConfigs; ConfigIndex++)
+            {
+                if (AllConfigurations[ConfigIndex] == cIt->m_Config)
+                {
+                    break;
+                }
+            }
+
+            PlatformConfigExists[PlatformIndex][ConfigIndex] = true;
         }
+
+        for (size_t PlatformIndex = 0; PlatformIndex < NumPlatforms; PlatformIndex++)
+        {
+            for (size_t ConfigIndex = 0; ConfigIndex < NumConfigs; ConfigIndex++)
+            {
+                if (!PlatformConfigExists[PlatformIndex][ConfigIndex])
+                {
+                    WriteF("    <ProjectConfiguration Include=\"%s|%s\">\n", AllConfigurations[ConfigIndex].Get(), AllPlatforms[PlatformIndex].Get() );
+                    WriteF("      <Configuration>%s</Configuration>\n", AllConfigurations[ConfigIndex].Get() );
+                    WriteF("      <Platform>%s</Platform>\n", AllPlatforms[PlatformIndex].Get() );
+                    WriteF("      <!-- Dummy -->\n");
+                    Write( "    </ProjectConfiguration>\n" );
+                }
+            }
+        }
+
         Write( "  </ItemGroup>\n" );
     }
 

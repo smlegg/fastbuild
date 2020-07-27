@@ -47,18 +47,96 @@ const AString & SLNGenerator::GenerateSLN( const AString & solutionFile,
     Array< AString > solutionProjectsToFolder( projects.GetSize(), true );
     Array< AString > solutionFolderPaths( solutionFolders.GetSize(), true );
 
+    Array< SolutionConfig > incompleteConfigs;
+    FindIncompleteConfigs( solutionConfigs, incompleteConfigs );
+
     // construct sln file
     WriteHeader( solutionVisualStudioVersion, solutionMinimumVisualStudioVersion );
     WriteProjectListings( solutionBasePath, projects, solutionFolders, solutionDependencies, solutionProjectsToFolder );
     WriteSolutionFolderListings( solutionBasePath, solutionFolders, solutionFolderPaths );
     Write( "Global\r\n" );
-    WriteSolutionConfigurationPlatforms( solutionConfigs );
-    WriteProjectConfigurationPlatforms( solutionConfigs, projects );
+    WriteSolutionConfigurationPlatforms( solutionConfigs, incompleteConfigs );
+    WriteProjectConfigurationPlatforms( solutionConfigs, incompleteConfigs, projects );
     WriteNestedProjects( solutionProjectsToFolder, solutionFolderPaths );
     WriteFooter();
 
     return m_Output;
 }
+
+// FindIncompleteConfigs
+void SLNGenerator::FindIncompleteConfigs( const Array< SolutionConfig > & solutionConfigs,
+                                          Array<SolutionConfig> & incompleteConfigs )
+{
+    Array<AString> AllSolutionConfigurations;
+    Array<AString> AllConfigurations;
+    Array<AString> AllSolutionPlatforms;
+    Array<AString> AllPlatforms;
+    for (const SolutionConfig & config : solutionConfigs)
+    {
+        if (!AllSolutionConfigurations.Find(config.m_SolutionConfig))
+        {
+            AllSolutionConfigurations.Append(config.m_SolutionConfig);
+            AllConfigurations.Append(config.m_Config);
+        }
+        if (!AllSolutionPlatforms.Find(config.m_SolutionPlatform))
+        {
+            AllSolutionPlatforms.Append(config.m_SolutionPlatform);
+            AllPlatforms.Append(config.m_Platform);
+        }
+    }
+
+    size_t NumPlatforms = AllSolutionPlatforms.GetSize();
+    size_t NumConfigurations = AllSolutionConfigurations.GetSize();
+    Array<Array<bool>> PlatformConfigExists;
+    PlatformConfigExists.SetSize(NumPlatforms);
+    for (size_t PlatformIndex = 0; PlatformIndex < NumPlatforms; PlatformIndex++)
+    {
+        PlatformConfigExists[PlatformIndex].SetSize(NumConfigurations);
+        for (size_t ConfigurationIndex = 0; ConfigurationIndex < NumConfigurations; ConfigurationIndex++)
+        {
+            PlatformConfigExists[PlatformIndex][ConfigurationIndex] = false;
+        }
+    }
+
+    for (const SolutionConfig & config : solutionConfigs)
+    {
+        size_t PlatformIndex;
+        for (PlatformIndex = 0; PlatformIndex < NumPlatforms; PlatformIndex++)
+        {
+            if (AllSolutionPlatforms[PlatformIndex] == config.m_Platform)
+            {
+                break;
+            }
+        }
+
+        size_t ConfigurationIndex;
+        for (ConfigurationIndex = 0; ConfigurationIndex < NumConfigurations; ConfigurationIndex++)
+        {
+            if (AllSolutionConfigurations[ConfigurationIndex] == config.m_Config)
+            {
+                break;
+            }
+        }
+
+        PlatformConfigExists[PlatformIndex][ConfigurationIndex] = true;
+    }
+
+    for (size_t PlatformIndex = 0; PlatformIndex < NumPlatforms; PlatformIndex++)
+    {
+        for (size_t ConfigurationIndex = 0; ConfigurationIndex < NumConfigurations; ConfigurationIndex++)
+        {
+            if (!PlatformConfigExists[PlatformIndex][ConfigurationIndex])
+            {
+                incompleteConfigs.EmplaceBack();
+                incompleteConfigs.Top().m_SolutionConfig = AllSolutionConfigurations[ConfigurationIndex];
+                incompleteConfigs.Top().m_SolutionPlatform = AllSolutionPlatforms[PlatformIndex];
+                incompleteConfigs.Top().m_Config = AllConfigurations[ConfigurationIndex];
+                incompleteConfigs.Top().m_Platform = AllPlatforms[PlatformIndex];
+            }
+        }
+    }
+}
+
 
 // WriteHeader
 //------------------------------------------------------------------------------
@@ -269,7 +347,7 @@ void SLNGenerator::WriteSolutionFolderListings( const AString & solutionBasePath
 
 // WriteSolutionConfigurationPlatforms
 //------------------------------------------------------------------------------
-void SLNGenerator::WriteSolutionConfigurationPlatforms( const Array< SolutionConfig > & solutionConfigs )
+void SLNGenerator::WriteSolutionConfigurationPlatforms( const Array< SolutionConfig > & solutionConfigs, const Array< SolutionConfig > & incompleteConfigs )
 {
     Write( "\tGlobalSection(SolutionConfigurationPlatforms) = preSolution\r\n" );
 
@@ -282,12 +360,20 @@ void SLNGenerator::WriteSolutionConfigurationPlatforms( const Array< SolutionCon
                it->m_SolutionConfig.Get(), it->m_SolutionPlatform.Get() );
     }
 
+    for ( const SolutionConfig & config : incompleteConfigs )
+    {
+        Write( "\t\t%s|%s = %s|%s\r\n",
+            config.m_SolutionConfig.Get(), config.m_SolutionPlatform.Get(),
+            config.m_SolutionConfig.Get(), config.m_SolutionPlatform.Get() );
+    }
+
     Write( "\tEndGlobalSection\r\n" );
 }
 
 // WriteProjectConfigurationPlatforms
 //------------------------------------------------------------------------------
 void SLNGenerator::WriteProjectConfigurationPlatforms( const Array< SolutionConfig > & solutionConfigs,
+                                                       const Array< SolutionConfig > & incompleteConfigs,
                                                        const Array< VSProjectBaseNode * > & projects )
 {
     Write( "\tGlobalSection(ProjectConfigurationPlatforms) = postSolution\r\n" );
@@ -341,7 +427,18 @@ void SLNGenerator::WriteProjectConfigurationPlatforms( const Array< SolutionConf
                        solutionConfig.m_SolutionConfig.Get(), solutionConfig.m_SolutionPlatform.Get(),
                        solutionConfig.m_Config.Get(), solutionConfig.m_Platform.Get() );
             }
+        }
 
+        for ( const SolutionConfig & solutionConfig : incompleteConfigs )
+        {
+            Write( "\t\t%s.%s|%s.ActiveCfg = %s|%s\r\n",
+                   projectGuid.Get(),
+                   solutionConfig.m_SolutionConfig.Get(), solutionConfig.m_SolutionPlatform.Get(),
+                   solutionConfig.m_Config.Get(), solutionConfig.m_Platform.Get() );
+                Write( "\t\t%s.%s|%s.Build.0 = %s|%s\r\n",
+                       projectGuid.Get(),
+                       solutionConfig.m_SolutionConfig.Get(), solutionConfig.m_SolutionPlatform.Get(),
+                       solutionConfig.m_Config.Get(), solutionConfig.m_Platform.Get() );
         }
     }
 

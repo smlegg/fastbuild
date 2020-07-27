@@ -34,6 +34,8 @@ public:
                                  const Array< SolutionFolder > & solutionFolders );
 
 private:
+    void FindIncompleteConfigs( const Array< SolutionConfig > & solutionConfigs,
+                                Array<SolutionConfig> & incompleteConfigs );
     void WriteHeader( const AString & solutionVisualStudioVersion,
                       const AString & solutionMinimumVisualStudioVersion );
     void WriteProjectListings( const AString& solutionBasePath,
@@ -44,8 +46,10 @@ private:
     void WriteSolutionFolderListings( const AString & solutionBasePath,
                                       const Array< SolutionFolder > & solutionFolders,
                                       Array< AString > & solutionFolderPaths );
-    void WriteSolutionConfigurationPlatforms( const Array< SolutionConfig > & solutionConfigs );
+    void WriteSolutionConfigurationPlatforms( const Array< SolutionConfig > & solutionConfigs,
+                                              const Array< SolutionConfig > & incompleteConfigs );
     void WriteProjectConfigurationPlatforms( const Array< SolutionConfig > & solutionConfigs,
+                                             const Array< SolutionConfig > & incompleteConfigs,
                                              const Array< VSProjectBaseNode * > & projects );
     void WriteNestedProjects( const Array< AString > & solutionProjectsToFolder,
                               const Array< AString > & solutionFolderPaths );
