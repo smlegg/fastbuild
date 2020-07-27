@@ -50,6 +50,9 @@ public:
     static void ExtractIncludePaths( const AString & compilerArgs,
                                      Array< AString > & outIncludes,
                                      bool escapeQuotes );
+    static void ExtractAssemblyIncludePaths( const AString & compilerArgs,
+                                             Array< AString > & outIncludes,
+                                             bool escapeQuotes );
     static void ExtractDefines( const AString & compilerArgs,
                                 Array< AString > & outDefines,
                                 bool escapeQuotes );

@@ -424,6 +424,21 @@ void ProjectGeneratorBase::AddConfig( const ProjectGeneratorBaseConfig & config 
     ExtractIntellisenseOptions( compilerArgs, prefixes, outIncludes, escapeQuotes, keepFullOption );
 }
 
+// ExtractAssemblyIncludePaths
+//------------------------------------------------------------------------------
+/*static*/ void ProjectGeneratorBase::ExtractAssemblyIncludePaths( const AString & compilerArgs,
+                                                                   Array< AString > & outIncludes,
+                                                                   bool escapeQuotes )
+{
+    StackArray< AString, 2 > prefixes;
+    prefixes.EmplaceBack( "/AI" );
+    prefixes.EmplaceBack( "-AI" );
+
+    // Extract various kinds of includes
+    const bool keepFullOption = false;
+    ExtractIntellisenseOptions( compilerArgs, prefixes, outIncludes, escapeQuotes, keepFullOption );
+}
+
 // ExtractDefines
 //------------------------------------------------------------------------------
 /*static*/ void ProjectGeneratorBase::ExtractDefines( const AString & compilerArgs,

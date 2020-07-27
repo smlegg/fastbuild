@@ -398,7 +398,28 @@ const AString & VSProjectGenerator::GenerateVCXProj( const AString & projectFile
                 }
             }
             WritePGItem( "NMakeForcedIncludes",             cIt->m_ForcedIncludes );
-            WritePGItem( "NMakeAssemblySearchPath",         cIt->m_AssemblySearchPath );
+            if ( cIt->m_AssemblySearchPath.IsEmpty() == false )
+            {
+                WritePGItem( "NMakeAssemblySearchPath",         cIt->m_AssemblySearchPath );
+            }
+            else
+            {
+                if ( oln )
+                {
+                    Array< AString > includePaths;
+                    ProjectGeneratorBase::ExtractAssemblyIncludePaths( oln->GetCompilerOptions(), includePaths, false );
+                    for ( AString & include : includePaths )
+                    {
+                        ProjectGeneratorBase::GetRelativePath( projectBasePath, include, include );
+                        #if !defined( __WINDOWS__ )
+                            include.Replace( '/', '\\' ); // Convert to Windows-style slashes
+                        #endif
+                    }
+                    AStackString<> includePathsStr;
+                    ProjectGeneratorBase::ConcatIntellisenseOptions( includePaths, includePathsStr, nullptr, ";" );
+                    WritePGItem( "NMakeAssemblySearchPath", includePathsStr );
+                }
+            }
             WritePGItem( "NMakeForcedUsingAssemblies",      cIt->m_ForcedUsingAssemblies );
             if ( cIt->m_AdditionalOptions.IsEmpty() == false )
             {
