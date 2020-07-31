@@ -38,6 +38,8 @@ public:
     AString             m_BuildLogFile;
     AString             m_LayoutDir;
     AString             m_LayoutExtensionFilter;
+    AString             m_DeployMode;
+    AString             m_PullMappingFile;
     AString             m_Xbox360DebuggerCommand;
     AString             m_DebuggerFlavor;
     AString             m_AumidOverride;

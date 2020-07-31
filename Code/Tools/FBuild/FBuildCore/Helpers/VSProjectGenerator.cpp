@@ -446,6 +446,8 @@ const AString & VSProjectGenerator::GenerateVCXProj( const AString & projectFile
             WritePGItem( "AdditionalSymbolSearchPaths",     cIt->m_AdditionalSymbolSearchPaths );
             WritePGItem( "LayoutDir",                       cIt->m_LayoutDir );
             WritePGItem( "LayoutExtensionFilter",           cIt->m_LayoutExtensionFilter );
+            WritePGItem( "DeployMode",                      cIt->m_DeployMode );
+            WritePGItem( "PullMappingFile",                 cIt->m_PullMappingFile );
             Write( "  </PropertyGroup>\n" );
         }
     }
