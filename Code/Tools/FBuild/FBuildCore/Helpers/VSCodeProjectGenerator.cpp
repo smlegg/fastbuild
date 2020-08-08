@@ -111,7 +111,21 @@ const AString & VSCodeProjectGenerator::Generate( const Array< VSCodeProjectConf
 
 		if ( cIt->m_IntellisenseMode.IsEmpty() == false )
 		{
-			Write( "\t\t\t\"intellisenseMode\": \"%s\",\n", cIt->m_IntellisenseMode.Get() );
+			Write( "\t\t\t\"intelliSenseMode\": \"%s\",\n", cIt->m_IntellisenseMode.Get() );
+		}
+
+		{
+			StackArray< AString, 2 > prefixes;
+			prefixes.EmplaceBack( "-std=" );
+			prefixes.EmplaceBack( "/std:" );
+
+			Array< AString > standard;
+			ProjectGeneratorBase::ExtractIntellisenseOptions( oln->GetCompilerOptions(), prefixes, standard, false, false );
+
+			if ( standard.IsEmpty() == false )
+			{
+				Write( "\t\t\t\"cppStandard\": \"%s\",\n", standard[0].Get() );
+			}
 		}
 
 		Write( "\t\t\t\"browse\":\n" );
