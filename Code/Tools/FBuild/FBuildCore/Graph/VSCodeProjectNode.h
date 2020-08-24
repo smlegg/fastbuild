@@ -23,6 +23,8 @@ struct VSCodeProjectConfig
 	Array< AString > m_Defines;
 	Array< AString > m_IncludePath;
 	Array< AString > m_ForcedInclude;
+	AString m_Compiler;
+	Array< AString > m_CompilerArgs;
 	AString m_IntellisenseMode;
 	bool m_LimitSymbolsToIncludedHeaders;
 	AString m_DatabaseFilename;

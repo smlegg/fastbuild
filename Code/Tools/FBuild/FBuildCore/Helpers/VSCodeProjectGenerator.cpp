@@ -53,6 +53,21 @@ const AString & VSCodeProjectGenerator::Generate( const Array< VSCodeProjectConf
 
 		Write( "\t\t\t\"name\": \"%s\",\n", cIt->m_Config.Get() );
 
+		if ( cIt->m_Compiler.IsEmpty() == false )
+		{
+			AString compiler(cIt->m_Compiler);
+			compiler.Replace( '\\', '/' );
+			Write( "\t\t\t\"compilerPath\": \"%s\",\n", compiler.Get() );
+		}
+
+		if ( cIt->m_CompilerArgs.IsEmpty() == false )
+		{
+			Write( "\t\t\t\"compilerArgs\":\n" );
+			Write( "\t\t\t[\n" );
+			WriteStringList( cIt->m_CompilerArgs, "\t\t\t\t" );
+			Write( "\t\t\t],\n" );
+		}
+
 		const Array< AString >* includePaths;
 		Array< AString > extractedIncludePaths;
 		if ( cIt->m_IncludePath.IsEmpty() == false )
