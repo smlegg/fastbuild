@@ -398,6 +398,20 @@
     FormatError( iter, 1045u, nullptr, "Extraneous token(s) following '%s' directive.", directiveName );
 }
 
+// Error_1046_IfExpressionCannotStartWithBooleanOperator
+//------------------------------------------------------------------------------
+/*static*/ void Error::Error_1046_IfExpressionCannotStartWithBooleanOperator( const BFFToken * iter )
+{
+    FormatError( iter, 1046u, nullptr, "#if expression cannot start with boolean operator." );
+}
+
+// Error_1047_IfExpressionTooComplex
+//------------------------------------------------------------------------------
+/*static*/ void Error::Error_1047_IfExpressionTooComplex( const BFFToken* iter )
+{
+    FormatError( iter, 1047u, nullptr, "If expression too complex. Up to %i boolean operators supported.", BFFParser::MAX_OPERATOR_HISTORY );
+}
+
 // Error_1050_PropertyMustBeString
 //------------------------------------------------------------------------------
 /*static*/ void Error::Error_1050_PropertyMustBeOfType( const BFFToken * iter,
@@ -692,6 +706,22 @@
                                                                        const Function * function )
 {
     FormatError( iter, 1502u, function, "LightCache only compatible with MSVC Compiler." );
+}
+
+// Error_1503_CSharpCompilerShouldUseCSAssembly
+//------------------------------------------------------------------------------
+/*static*/ void Error::Error_1503_CSharpCompilerShouldUseCSAssembly( const BFFToken * iter,
+                                                                     const Function * function )
+{
+    FormatError( iter, 1503u, function, "C# compiler should use CSAssembly." );
+}
+
+// Error_1504_CSAssemblyRequiresACSharpCompiler
+//------------------------------------------------------------------------------
+/*static*/ void Error::Error_1504_CSAssemblyRequiresACSharpCompiler( const BFFToken * iter,
+                                                                     const Function * function )
+{
+    FormatError( iter, 1504u, function, "CSAssembly requires a C# Compiler." );
 }
 
 // Error_1999_UserError

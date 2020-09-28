@@ -21,6 +21,8 @@ REFLECT_NODE_BEGIN( CompilerNode, Node, MetaNone() )
     REFLECT_ARRAY( m_ExtraFiles,    "ExtraFiles",           MetaOptional() + MetaFile() )
     REFLECT_ARRAY( m_CustomEnvironmentVariables, "CustomEnvironmentVariables",  MetaOptional() )
     REFLECT( m_AllowDistribution,   "AllowDistribution",    MetaOptional() )
+    REFLECT( m_AllowResponseFile,   "AllowResponseFile",    MetaOptional() )
+    REFLECT( m_ForceResponseFile,   "ForceResponseFile",    MetaOptional() )
     REFLECT( m_VS2012EnumBugFix,    "VS2012EnumBugFix",     MetaOptional() )
     REFLECT( m_ClangRewriteIncludes, "ClangRewriteIncludes", MetaOptional() )
     REFLECT( m_ClangFixupUnity_Disable, "ClangFixupUnity_Disable", MetaOptional() )
@@ -30,6 +32,7 @@ REFLECT_NODE_BEGIN( CompilerNode, Node, MetaNone() )
     REFLECT_ARRAY( m_Environment,   "Environment",          MetaOptional() )
     REFLECT( m_UseLightCache,       "UseLightCache_Experimental", MetaOptional() )
     REFLECT( m_UseRelativePaths,    "UseRelativePaths_Experimental", MetaOptional() )
+    REFLECT( m_SourceMapping,       "SourceMapping_Experimental", MetaOptional() )
 
     // Internal
     REFLECT( m_CompilerFamilyEnum,  "CompilerFamilyEnum",   MetaHidden() )
@@ -41,6 +44,8 @@ REFLECT_END( CompilerNode )
 CompilerNode::CompilerNode()
     : Node( AString::GetEmpty(), Node::COMPILER_NODE, Node::FLAG_NONE )
     , m_AllowDistribution( true )
+    , m_AllowResponseFile( false )
+    , m_ForceResponseFile( false )
     , m_VS2012EnumBugFix( false )
     , m_ClangRewriteIncludes( true )
     , m_ClangFixupUnity_Disable( false )
@@ -257,6 +262,14 @@ bool CompilerNode::InitializeCompilerFamily( const BFFToken * iter, const Functi
             return true;
         }
 
+        // C# compiler
+        if ( compiler.EndsWithI( "csc.exe" ) ||
+             compiler.EndsWithI( "csc" ) )
+        {
+            m_CompilerFamilyEnum = CSHARP;
+            return true;
+        }
+
         // Auto-detect failed
         Error::Error_1500_CompilerDetectionFailed( iter, function, compiler );
         return false;
@@ -316,6 +329,11 @@ bool CompilerNode::InitializeCompilerFamily( const BFFToken * iter, const Functi
     if ( m_CompilerFamilyString.EqualsI( "orbis-wave-psslc" ) )
     {
         m_CompilerFamilyEnum = ORBIS_WAVE_PSSLC;
+        return true;
+    }
+    if ( m_CompilerFamilyString.EqualsI( "csharp" ) )
+    {
+        m_CompilerFamilyEnum = CSHARP;
         return true;
     }
 
