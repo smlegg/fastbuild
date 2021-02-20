@@ -5,6 +5,7 @@
 //------------------------------------------------------------------------------
 #include "Tools/FBuild/FBuildCore/FBuild.h"
 #include "Tools/FBuild/FBuildCore/FLog.h"
+#include "Tools/FBuild/FBuildCore/Helpers/BuildProfiler.h"
 #include "Tools/FBuild/FBuildCore/Helpers/CtrlCHandler.h"
 
 #include "Core/Process/Process.h"
@@ -33,12 +34,15 @@ enum ReturnCodes
     FBUILD_FAILED_TO_SPAWN_WRAPPER          = -5,
     FBUILD_FAILED_TO_SPAWN_WRAPPER_FINAL    = -6,
     FBUILD_WRAPPER_CRASHED                  = -7,
+    FBUILD_FAILED_TO_WSL_WRAPPER            = -8,
+    FBUILD_FAILED_TO_WRITE_PROFILE_JSON     = -9,
 };
 
 // Headers
 //------------------------------------------------------------------------------
 int WrapperMainProcess( const AString & args, const FBuildOptions & options, SystemMutex & finalProcess );
 int WrapperIntermediateProcess( const FBuildOptions & options );
+int32_t WrapperModeForWSL( const FBuildOptions & options );
 int Main( int argc, char * argv[] );
 
 // Misc
@@ -68,7 +72,7 @@ int main( int argc, char * argv[] )
 //------------------------------------------------------------------------------
 int Main( int argc, char * argv[] )
 {
-    PROFILE_FUNCTION
+    PROFILE_FUNCTION;
 
     Timer t;
 
@@ -90,6 +94,10 @@ int Main( int argc, char * argv[] )
     if ( wrapperMode == FBuildOptions::WRAPPER_MODE_INTERMEDIATE_PROCESS )
     {
         return WrapperIntermediateProcess( options );
+    }
+    if ( wrapperMode == FBuildOptions::WRAPPER_MODE_WINDOWS_SUBSYSTEM_FOR_LINUX )
+    {
+        return WrapperModeForWSL( options );
     }
 
     #if defined( __WINDOWS__ )
@@ -190,6 +198,10 @@ int Main( int argc, char * argv[] )
     {
         result = fBuild.DisplayDependencyDB( options.m_Targets );
     }
+    else if ( options.m_GenerateDotGraph )
+    {
+        result = fBuild.GenerateDotGraph( options.m_Targets, options.m_GenerateDotGraphFull );
+    }
     else if ( options.m_GenerateCompilationDatabase )
     {
         result = fBuild.GenerateCompilationDatabase( options.m_Targets );
@@ -205,6 +217,17 @@ int Main( int argc, char * argv[] )
     else
     {
         result = fBuild.Build( options.m_Targets );
+    }
+
+
+    // Build Profiling enabled?
+    bool problemSavingBuildProfileJSON = false;
+    if ( options.m_Profile )
+    {
+        if ( BuildProfiler::Get().SaveJSON( options, "fbuild_profile.json" ) == false )
+        {
+            problemSavingBuildProfileJSON = true;
+        }
     }
 
     if ( sharedData )
@@ -229,6 +252,11 @@ int Main( int argc, char * argv[] )
     }
 
     ctrlCHandler.DeregisterHandler(); // Ensure this happens before FBuild is destroyed
+
+    if ( problemSavingBuildProfileJSON )
+    {
+        return FBUILD_FAILED_TO_WRITE_PROFILE_JSON;
+    }    
     return ( result == true ) ? FBUILD_OK : FBUILD_BUILD_FAILED;
 }
 
@@ -303,6 +331,22 @@ int WrapperIntermediateProcess( const FBuildOptions & options )
     // don't wait for the final process (the main process will do that)
     p.Detach();
     return FBUILD_OK;
+}
+
+// WrapperModeForWSL
+//------------------------------------------------------------------------------
+int32_t WrapperModeForWSL( const FBuildOptions & options )
+{
+    // launch final process
+    Process p;
+    if ( !p.Spawn( options.m_WSLPath.Get(), options.m_Args.Get(), options.GetWorkingDir().Get(), nullptr, true ) ) // true = forward output to our tty
+    {
+        return FBUILD_FAILED_TO_WSL_WRAPPER;
+    }
+
+    // Return the result from the WSL process, which will itself forward the
+    // result of the target process
+    return p.WaitForExit();
 }
 
 //------------------------------------------------------------------------------

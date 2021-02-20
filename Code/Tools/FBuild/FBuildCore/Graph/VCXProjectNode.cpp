@@ -15,7 +15,7 @@
 #include "Tools/FBuild/FBuildCore/Helpers/VSProjectGenerator.h"
 
 // Core
-#include "Core/Containers/AutoPtr.h"
+#include "Core/Containers/UniquePtr.h"
 #include "Core/Env/ErrorFormat.h"
 #include "Core/FileIO/FileIO.h"
 #include "Core/FileIO/FileStream.h"
@@ -59,9 +59,15 @@ REFLECT_STRUCT_BEGIN_BASE( VSProjectConfigBase )
     REFLECT(        m_LocalDebuggerWorkingDirectory,"LocalDebuggerWorkingDirectory",MetaInheritFromOwner() + MetaOptional() )
     REFLECT(        m_LocalDebuggerCommand,         "LocalDebuggerCommand",         MetaInheritFromOwner() + MetaOptional() )
     REFLECT(        m_LocalDebuggerEnvironment,     "LocalDebuggerEnvironment",     MetaInheritFromOwner() + MetaOptional() )
+    REFLECT(        m_RemoteDebuggerCommand,            "RemoteDebuggerCommand",            MetaInheritFromOwner() + MetaOptional() )
+    REFLECT(        m_RemoteDebuggerCommandArguments,   "RemoteDebuggerCommandArguments",   MetaInheritFromOwner() + MetaOptional() )
+    REFLECT(        m_RemoteDebuggerWorkingDirectory,   "RemoteDebuggerWorkingDirectory",   MetaInheritFromOwner() + MetaOptional() )
     REFLECT(        m_Keyword,                      "Keyword",                      MetaInheritFromOwner() + MetaOptional() )
+    REFLECT(        m_RootNamespace,                "RootNamespace",                MetaInheritFromOwner() + MetaOptional() )
     REFLECT(        m_ApplicationType,              "ApplicationType",              MetaInheritFromOwner() + MetaOptional() )
     REFLECT(        m_ApplicationTypeRevision,      "ApplicationTypeRevision",      MetaInheritFromOwner() + MetaOptional() )
+    REFLECT(        m_TargetLinuxPlatform,          "TargetLinuxPlatform",          MetaInheritFromOwner() + MetaOptional() )
+    REFLECT(        m_LinuxProjectType,             "LinuxProjectType",             MetaInheritFromOwner() + MetaOptional() )
     REFLECT(        m_PackagePath,                  "PackagePath",                  MetaInheritFromOwner() + MetaOptional() )
     REFLECT(        m_AdditionalSymbolSearchPaths,  "AdditionalSymbolSearchPaths",  MetaInheritFromOwner() + MetaOptional() )
 REFLECT_END( VSProjectConfigBase )
@@ -93,7 +99,6 @@ REFLECT_NODE_BEGIN( VCXProjectNode, VSProjectBaseNode, MetaName( "ProjectOutput"
     REFLECT_ARRAY_OF_STRUCT(    m_ProjectConfigs,   "ProjectConfigs",               VSProjectConfig,    MetaOptional() )
     REFLECT_ARRAY_OF_STRUCT(    m_ProjectFileTypes, "ProjectFileTypes",             VSProjectFileType,  MetaOptional() )
 
-    REFLECT(        m_RootNamespace,                "RootNamespace",                MetaOptional() )
     REFLECT(        m_DefaultLanguage,              "DefaultLanguage",              MetaOptional() )
     REFLECT(        m_ApplicationEnvironment,       "ApplicationEnvironment",       MetaOptional() )
     REFLECT(        m_ProjectSccEntrySAK,           "ProjectSccEntrySAK",           MetaOptional() )
@@ -104,7 +109,7 @@ REFLECT_NODE_BEGIN( VCXProjectNode, VSProjectBaseNode, MetaName( "ProjectOutput"
     REFLECT_ARRAY_OF_STRUCT(  m_ProjectProjectImports,  "ProjectProjectImports",    VSProjectImport,    MetaOptional() )
 
     // Base Project Config settings
-    REFLECT_STRUCT( m_BaseProjectConfig,            "BaseProjectConfig",            VSProjectConfigBase,    MetaEmbedMembers() );
+    REFLECT_STRUCT( m_BaseProjectConfig,            "BaseProjectConfig",            VSProjectConfigBase,    MetaEmbedMembers() )
 REFLECT_END( VCXProjectNode )
 
 // VSProjectConfig::ResolveTargets
@@ -263,7 +268,7 @@ VCXProjectNode::~VCXProjectNode() = default;
     pg.SetBasePaths( m_ProjectBasePaths );
 
     // Globals
-    pg.SetRootNamespace( m_RootNamespace );
+    pg.SetRootNamespace( m_BaseProjectConfig.m_RootNamespace );
     pg.SetProjectGuid( m_ProjectGuid );
     pg.SetDefaultLanguage( m_DefaultLanguage );
     pg.SetApplicationEnvironment( m_ApplicationEnvironment );
@@ -276,7 +281,7 @@ VCXProjectNode::~VCXProjectNode() = default;
     // files from directory listings
     for ( const Dependency & staticDep : m_StaticDependencies )
     {
-        DirectoryListNode * dirNode = staticDep.GetNode()->CastTo< DirectoryListNode >();
+        const DirectoryListNode * dirNode = staticDep.GetNode()->CastTo< DirectoryListNode >();
         for ( const FileIO::FileInfo & fileInfo : dirNode->GetFiles() )
         {
             pg.AddFile( fileInfo.m_Name );
@@ -334,7 +339,7 @@ bool VCXProjectNode::Save( const AString & content, const AString & fileName ) c
         else
         {
             // check content
-            AutoPtr< char > mem( ( char *)ALLOC( oldFileSize ) );
+            UniquePtr< char > mem( ( char *)ALLOC( oldFileSize ) );
             if ( old.Read( mem.Get(), oldFileSize ) != oldFileSize )
             {
                 FLOG_ERROR( "VCXProject - Failed to read '%s'", fileName.Get() );

@@ -16,6 +16,7 @@
 #include "FunctionForEach.h"
 #include "FunctionIf.h"
 #include "FunctionLibrary.h"
+#include "FunctionListDependencies.h"
 #include "FunctionObjectList.h"
 #include "FunctionPrint.h"
 #include "FunctionRemoveDir.h"
@@ -62,7 +63,7 @@
 
 // Static
 //------------------------------------------------------------------------------
-/*static*/ Array<const Function *> g_Functions( 26, false );
+/*static*/ Array<const Function *> g_Functions( 27, false );
 
 // CONSTRUCTOR
 //------------------------------------------------------------------------------
@@ -107,6 +108,7 @@ Function::~Function() = default;
     g_Functions.Append( FNEW( FunctionForEach ) );
     g_Functions.Append( FNEW( FunctionIf ) );
     g_Functions.Append( FNEW( FunctionLibrary ) );
+    g_Functions.Append( FNEW( FunctionListDependencies ) );
     g_Functions.Append( FNEW( FunctionObjectList ) );
     g_Functions.Append( FNEW( FunctionPrint ) );
     g_Functions.Append( FNEW( FunctionRemoveDir ) );
@@ -807,7 +809,7 @@ bool Function::GetNodeList( NodeGraph & nodeGraph,
     // found - is it a group?
     if ( n->GetType() == Node::ALIAS_NODE )
     {
-        AliasNode * an = n->CastTo< AliasNode >();
+        const AliasNode * an = n->CastTo< AliasNode >();
         const Dependencies & aNodes = an->GetAliasedNodes();
         for ( const Dependency * it = aNodes.Begin(); it != aNodes.End(); ++it )
         {
@@ -1122,12 +1124,12 @@ bool Function::PopulateStringHelper( NodeGraph & nodeGraph,
     if ( fileMD && ( !fileMD->IsRelative() ) )
     {
         // Is it an Alias?
-        Node * node = nodeGraph.FindNode( string );
+        const Node * node = nodeGraph.FindNode( string );
         if ( node )
         {
             if ( node->GetType() == Node::ALIAS_NODE )
             {
-                AliasNode * aliasNode = node->CastTo< AliasNode >();
+                const AliasNode * aliasNode = node->CastTo< AliasNode >();
                 for ( const Dependency & aliasedNode : aliasNode->GetAliasedNodes() )
                 {
                     if ( !PopulateStringHelper( nodeGraph, iter, pathMD, fileMD, allowNonFileMD, variable, aliasedNode.GetNode()->GetName(), outStrings ) )
@@ -1452,7 +1454,7 @@ bool Function::PopulateArrayOfStructsElement( NodeGraph & nodeGraph,
             propertyName += property.GetName();
 
             // Try to find property in BFF
-            const BFFVariable ** found = BFFVariable::GetMemberByName( propertyName, srcVariable->GetStructMembers() );
+            const BFFVariable * const * found = BFFVariable::GetMemberByName( propertyName, srcVariable->GetStructMembers() );
             const BFFVariable * var = nullptr;
             if ( found )
             {
