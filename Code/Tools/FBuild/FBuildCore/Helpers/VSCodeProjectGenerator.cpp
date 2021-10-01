@@ -129,6 +129,7 @@ const AString & VSCodeProjectGenerator::Generate( const Array< VSCodeProjectConf
 			Write( "\t\t\t\"intelliSenseMode\": \"%s\",\n", cIt->m_IntellisenseMode.Get() );
 		}
 
+		if ( oln )
 		{
 			StackArray< AString, 2 > prefixes;
 			prefixes.EmplaceBack( "-std=" );

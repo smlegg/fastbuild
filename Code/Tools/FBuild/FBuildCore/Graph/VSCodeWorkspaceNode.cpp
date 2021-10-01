@@ -36,7 +36,7 @@ static VSCodeProjectNode * ResolveVSCodeProjectRecurse( Node * node )
 	// search inside targets if this is an alias
 	if ( node->GetType() == Node::ALIAS_NODE )
 	{
-		AliasNode * const alias = node->CastTo< AliasNode >();
+		const AliasNode * const alias = node->CastTo< AliasNode >();
 		const Dependencies & targets = alias->GetAliasedNodes();
 
 		const Dependency * const end = targets.End();
@@ -156,7 +156,7 @@ VSCodeWorkspaceNode::~VSCodeWorkspaceNode() = default;
 		if ( project )
 		{
 			m_ProjectNodes.Append( project );
-    	} else
+    	} else if ( node )
 		{
 			Error::Error_1005_UnsupportedNodeType( iter, function, ".WorkspaceProjects", node->GetName(), node->GetType() );
 		}
