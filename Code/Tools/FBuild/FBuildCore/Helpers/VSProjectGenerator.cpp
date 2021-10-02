@@ -381,29 +381,46 @@ const AString & VSProjectGenerator::GenerateVCXProj( const AString & projectFile
                     WritePGItem( "NMakePreprocessorDefinitions", definesStr );
                 }
             }
+            StackArray< AString > includePaths;
+            StackArray< AString > forceIncludes;
+            if ( oln )
+            {
+                ProjectGeneratorBase::ExtractIncludePaths( oln->GetCompilerOptions(), includePaths, forceIncludes, false );
+            }
             if ( cIt->m_IncludeSearchPath.IsEmpty() == false )
             {
                 WritePGItem( "NMakeIncludeSearchPath",          cIt->m_IncludeSearchPath );
             }
-            else
+            else if ( oln )
             {
-                if ( oln )
+                for ( AString & include : includePaths )
                 {
-                    Array< AString > includePaths;
-                    ProjectGeneratorBase::ExtractIncludePaths( oln->GetCompilerOptions(), includePaths, false );
-                    for ( AString & include : includePaths )
-                    {
-                        ProjectGeneratorBase::GetRelativePath( projectBasePath, include, include );
-                        #if !defined( __WINDOWS__ )
-                            include.Replace( '/', '\\' ); // Convert to Windows-style slashes
-                        #endif
-                    }
-                    AStackString<> includePathsStr;
-                    ProjectGeneratorBase::ConcatIntellisenseOptions( includePaths, includePathsStr, nullptr, ";" );
-                    WritePGItem( "NMakeIncludeSearchPath", includePathsStr );
+                    ProjectGeneratorBase::GetRelativePath( projectBasePath, include, include );
+                    #if !defined( __WINDOWS__ )
+                        include.Replace( '/', '\\' ); // Convert to Windows-style slashes
+                    #endif
                 }
+                AStackString<> includePathsStr;
+                ProjectGeneratorBase::ConcatIntellisenseOptions( includePaths, includePathsStr, nullptr, ";" );
+                WritePGItem( "NMakeIncludeSearchPath", includePathsStr );
             }
-            WritePGItem( "NMakeForcedIncludes",             cIt->m_ForcedIncludes );
+            if ( cIt->m_ForcedIncludes.IsEmpty() == false )
+            {
+                WritePGItem( "NMakeForcedIncludes",             cIt->m_ForcedIncludes );
+            }
+            else if ( oln )
+            {
+                for ( AString & forceInclude : forceIncludes )
+                {
+                    ProjectGeneratorBase::GetRelativePath( projectBasePath, forceInclude, forceInclude );
+                    #if !defined( __WINDOWS__ )
+                        forceInclude.Replace( '/', '\\' ); // Convert to Windows-style slashes
+                    #endif
+                }
+                AStackString<> forceIncludePathsStr;
+                ProjectGeneratorBase::ConcatIntellisenseOptions( forceIncludes, forceIncludePathsStr, nullptr, ";" );
+                WritePGItem( "NMakeForcedIncludes", forceIncludePathsStr );
+            }
             if ( cIt->m_AssemblySearchPath.IsEmpty() == false )
             {
                 WritePGItem( "NMakeAssemblySearchPath",         cIt->m_AssemblySearchPath );
@@ -412,18 +429,18 @@ const AString & VSProjectGenerator::GenerateVCXProj( const AString & projectFile
             {
                 if ( oln )
                 {
-                    Array< AString > includePaths;
-                    ProjectGeneratorBase::ExtractAssemblyIncludePaths( oln->GetCompilerOptions(), includePaths, false );
-                    for ( AString & include : includePaths )
+                    Array< AString > assemblyIncludePaths;
+                    ProjectGeneratorBase::ExtractAssemblyIncludePaths( oln->GetCompilerOptions(), assemblyIncludePaths, false );
+                    for ( AString & include : assemblyIncludePaths )
                     {
                         ProjectGeneratorBase::GetRelativePath( projectBasePath, include, include );
                         #if !defined( __WINDOWS__ )
                             include.Replace( '/', '\\' ); // Convert to Windows-style slashes
                         #endif
                     }
-                    AStackString<> includePathsStr;
-                    ProjectGeneratorBase::ConcatIntellisenseOptions( includePaths, includePathsStr, nullptr, ";" );
-                    WritePGItem( "NMakeAssemblySearchPath", includePathsStr );
+                    AStackString<> assemblyIncludePathsStr;
+                    ProjectGeneratorBase::ConcatIntellisenseOptions( assemblyIncludePaths, assemblyIncludePathsStr, nullptr, ";" );
+                    WritePGItem( "NMakeAssemblySearchPath", assemblyIncludePathsStr );
                 }
             }
             WritePGItem( "NMakeForcedUsingAssemblies",      cIt->m_ForcedUsingAssemblies );
