@@ -20,6 +20,7 @@
 #include "Core/FileIO/FileIO.h"
 #include "Core/FileIO/FileStream.h"
 #include "Core/FileIO/PathUtils.h"
+#include "Core/Math/xxHash.h"
 #include "Core/Strings/AStackString.h"
 
 // system
@@ -91,6 +92,7 @@ REFLECT_END( VSProjectImport )
 REFLECT_NODE_BEGIN( VCXProjectNode, VSProjectBaseNode, MetaName( "ProjectOutput" ) + MetaFile() )
     REFLECT_ARRAY(  m_ProjectInputPaths,            "ProjectInputPaths",            MetaOptional() + MetaPath() )
     REFLECT_ARRAY(  m_ProjectInputPathsExclude,     "ProjectInputPathsExclude",     MetaOptional() + MetaPath() )
+    REFLECT(        m_ProjectInputPathsRecurse,     "ProjectInputPathsRecurse",     MetaOptional() )
     REFLECT_ARRAY(  m_ProjectFiles,                 "ProjectFiles",                 MetaOptional() + MetaFile() )
     REFLECT_ARRAY(  m_ProjectFilesToExclude,        "ProjectFilesToExclude",        MetaOptional() + MetaFile() )
     REFLECT_ARRAY(  m_ProjectPatternToExclude,      "ProjectPatternToExclude",      MetaOptional() + MetaFile() )
@@ -185,7 +187,7 @@ VCXProjectNode::VCXProjectNode()
                                               m_ProjectInputPathsExclude,
                                               m_ProjectFilesToExclude,
                                               m_ProjectPatternToExclude,
-                                              true, // Recursive
+                                              m_ProjectInputPathsRecurse,
                                               false, // Don't include read-only status in hash
                                               &m_ProjectAllowedFileExtensions,
                                               "ProjectInputPaths",
@@ -251,7 +253,7 @@ VCXProjectNode::VCXProjectNode()
 
     // Store all dependencies
     m_StaticDependencies.SetCapacity( dirNodes.GetSize() );
-    m_StaticDependencies.Append( dirNodes );
+    m_StaticDependencies.Add( dirNodes );
 
     return true;
 }
@@ -310,6 +312,9 @@ VCXProjectNode::~VCXProjectNode() = default;
         return NODE_RESULT_FAILED; // Save will have emitted an error
     }
 
+    // Record stamp representing the contents of the files
+    m_Stamp = xxHash::Calc64( project ) + xxHash::Calc64( filters );
+
     return NODE_RESULT_OK;
 }
 
@@ -331,7 +336,7 @@ bool VCXProjectNode::Save( const AString & content, const AString & fileName ) c
     else
     {
         // files differ in size?
-        size_t oldFileSize = (size_t)old.GetFileSize();
+        const size_t oldFileSize = (size_t)old.GetFileSize();
         if ( oldFileSize != content.GetLength() )
         {
             needToWrite = true;

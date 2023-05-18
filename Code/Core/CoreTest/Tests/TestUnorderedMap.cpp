@@ -3,14 +3,14 @@
 
 // Includes
 //------------------------------------------------------------------------------
-#include "TestFramework/UnitTest.h"
+#include "TestFramework/TestGroup.h"
 
 #include "Core/Containers/UnorderedMap.h"
 #include "Core/Strings/AString.h"
 
 // TestUnorderedMap
 //------------------------------------------------------------------------------
-class TestUnorderedMap : public UnitTest
+class TestUnorderedMap : public TestGroup
 {
 private:
     DECLARE_TESTS
@@ -69,7 +69,7 @@ void TestUnorderedMap::Find() const
 
         // found
         {
-            auto* pair = map.Find( AString( "Hello" ) );
+            const auto* pair = map.Find( AString( "Hello" ) );
             TEST_ASSERT( pair );
             TEST_ASSERT( pair->m_Key == "Hello" );
             TEST_ASSERT( pair->m_Value == "there" );
@@ -77,7 +77,7 @@ void TestUnorderedMap::Find() const
 
         // not found
         {
-            auto* pair = map.Find( AString( "Thing" ) );
+            const auto* pair = map.Find( AString( "Thing" ) );
             TEST_ASSERT( pair == nullptr );
         }
     }

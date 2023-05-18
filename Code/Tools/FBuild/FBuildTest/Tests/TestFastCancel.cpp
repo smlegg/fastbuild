@@ -34,7 +34,7 @@ REGISTER_TESTS_END
 //------------------------------------------------------------------------------
 static uint32_t CancelHelperThread( void * )
 {
-    Timer t;
+    const Timer t;
 
     // Wait for spawned processes to own all mutexes
     SystemMutex mutex1( "FASTBuildFastCancelTest1" );
@@ -103,7 +103,7 @@ void TestFastCancel::Cancel() const
         {
             // Ensure if test is broken that it fails sensibly
             tryCount++;
-            ASSERT( tryCount < 100 );
+            TEST_ASSERT( tryCount < 100 );
 
             // Wait and try again
             Thread::Sleep( 10 );

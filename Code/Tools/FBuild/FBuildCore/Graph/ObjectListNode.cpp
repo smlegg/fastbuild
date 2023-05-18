@@ -67,6 +67,7 @@ REFLECT_NODE_BEGIN( ObjectListNode, Node, MetaNone() )
     #endif
     REFLECT( m_ExtraPDBPath,                        "ExtraPDBPath",                     MetaHidden() )
     REFLECT( m_ExtraASMPath,                        "ExtraASMPath",                     MetaHidden() )
+    REFLECT( m_ExtraSourceDependenciesPath,         "ExtraSourceDependenciesPath",      MetaHidden() )
     REFLECT( m_ObjectListInputStartIndex,           "ObjectListInputStartIndex",        MetaHidden() )
     REFLECT( m_ObjectListInputEndIndex,             "ObjectListInputEndIndex",          MetaHidden() )
     REFLECT( m_CompilerFlags.m_Flags,               "ObjFlags",                         MetaHidden() )
@@ -267,7 +268,7 @@ ObjectListNode::ObjectListNode()
             Error::Error_1102_UnexpectedType( iter, function, "CompilerInputUnity", unity, n->GetType(), Node::UNITY_NODE );
             return false;
         }
-        compilerInputUnity.EmplaceBack( n );
+        compilerInputUnity.Add( n );
     }
 
     // .CompilerInputPath
@@ -309,15 +310,18 @@ ObjectListNode::ObjectListNode()
     }
 
     // Extra output paths
-    ((FunctionObjectList *)function)->GetExtraOutputPaths( m_CompilerOptions, m_ExtraPDBPath, m_ExtraASMPath );
+    ((FunctionObjectList *)function)->GetExtraOutputPaths( m_CompilerOptions,
+                                                           m_ExtraPDBPath,
+                                                           m_ExtraASMPath,
+                                                           m_ExtraSourceDependenciesPath );
 
     // Store dependencies
     m_StaticDependencies.SetCapacity( compilerInputPath.GetSize() +
                                       compilerInputUnity.GetSize() +
                                       compilerInputObjectLists.GetSize() );
-    m_StaticDependencies.Append( compilerInputPath );
-    m_StaticDependencies.Append( compilerInputUnity );
-    m_StaticDependencies.Append( compilerInputObjectLists );
+    m_StaticDependencies.Add( compilerInputPath );
+    m_StaticDependencies.Add( compilerInputUnity );
+    m_StaticDependencies.Add( compilerInputObjectLists );
 
     // Take note of how many things are treated as inputs
     // (this is needed so LibraryNode can add some additional things)
@@ -349,7 +353,7 @@ ObjectListNode::~ObjectListNode() = default;
     // Handle converting all static inputs into dynamic onces (i.e. cpp->obj)
     for ( size_t i=m_ObjectListInputStartIndex; i<m_ObjectListInputEndIndex; ++i )
     {
-        Dependency & dep = m_StaticDependencies[ i ];
+        const Dependency & dep = m_StaticDependencies[ i ];
 
         // is this a dir list?
         if ( dep.GetNode()->GetType() == Node::DIRECTORY_LIST_NODE )
@@ -500,7 +504,7 @@ ObjectListNode::~ObjectListNode() = default;
     {
         Node * node = nodeGraph.FindNode( m_PrecompiledHeaderName );
         ASSERT( node ); // Should always exist if we get here
-        m_DynamicDependencies.EmplaceBack( node );
+        m_DynamicDependencies.Add( node );
     }
 
     return true;
@@ -540,6 +544,15 @@ ObjectListNode::~ObjectListNode() = default;
         }
     }
 
+    if ( m_ExtraSourceDependenciesPath.IsEmpty() == false )
+    {
+        if ( !FileIO::EnsurePathExists( m_ExtraSourceDependenciesPath ) )
+        {
+            FLOG_ERROR( "Failed to create folder for /sourceDependencies file '%s'", m_ExtraSourceDependenciesPath.Get() );
+            return false;
+        }
+    }
+
     return true;
 }
 
@@ -571,11 +584,9 @@ ObjectListNode::~ObjectListNode() = default;
 //------------------------------------------------------------------------------
 void ObjectListNode::GetInputFiles( Args & fullArgs, const AString & pre, const AString & post, bool objectsInsteadOfLibs ) const
 {
-    for ( Dependencies::Iter i = m_DynamicDependencies.Begin();
-          i != m_DynamicDependencies.End();
-          i++ )
+    for ( const Dependency & dep : m_DynamicDependencies )
     {
-        const Node * n = i->GetNode();
+        const Node * n = dep.GetNode();
 
         // handle pch files - get path to object
         if ( n->GetType() == Node::OBJECT_NODE )
@@ -638,12 +649,9 @@ void ObjectListNode::GetInputFiles( Array< AString > & files ) const
     ASSERT( GetType() == Node::OBJECT_LIST_NODE );
 
     files.SetCapacity( files.GetCapacity() + m_DynamicDependencies.GetSize() );
-    for ( Dependencies::Iter i = m_DynamicDependencies.Begin();
-          i != m_DynamicDependencies.End();
-          i++ )
+    for ( const Dependency & dep : m_DynamicDependencies )
     {
-        const Node * n = i->GetNode();
-        files.Append( n->GetName() );
+        files.Append( dep.GetNode()->GetName() );
     }
 }
 
@@ -749,7 +757,7 @@ bool ObjectListNode::CreateDynamicObjectNode( NodeGraph & nodeGraph,
             return false;
         }
     }
-    m_DynamicDependencies.EmplaceBack( on );
+    m_DynamicDependencies.Add( on );
     return true;
 }
 

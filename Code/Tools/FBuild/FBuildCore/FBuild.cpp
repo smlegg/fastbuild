@@ -18,7 +18,6 @@
 #include "Graph/SettingsNode.h"
 #include "Helpers/BuildProfiler.h"
 #include "Helpers/CompilationDatabase.h"
-#include "Helpers/Report.h"
 #include "Protocol/Client.h"
 #include "Protocol/Protocol.h"
 #include "WorkerPool/JobQueue.h"
@@ -269,7 +268,7 @@ bool FBuild::GetTargets( const Array< AString > & targets, Dependencies & outDep
 
             return false;
         }
-        outDeps.EmplaceBack( node );
+        outDeps.Add( node );
     }
 
     return true;
@@ -281,7 +280,7 @@ bool FBuild::Build( const Array< AString > & targets )
 {
     // create a temporary node, not hooked into the DB
     NodeProxy proxy( AStackString< 32 >( "*proxy*" ) );
-    Dependencies deps( targets.GetSize(), 0 );
+    Dependencies deps( targets.GetSize() );
     if ( !GetTargets( targets, deps ) )
     {
         return false; // GetTargets will have emitted an error
@@ -318,16 +317,13 @@ bool FBuild::SaveDependencyGraph( const char * nodeGraphDBFile ) const
     MemoryStream memoryStream( 32 * 1024 * 1024, 8 * 1024 * 1024 );
     m_DependencyGraph->Save( memoryStream, nodeGraphDBFile );
 
-    // We'll save to a tmp file first
-    AStackString<> tmpFileName( nodeGraphDBFile );
-    tmpFileName += ".tmp";
-
     // Ensure output dir exists where we'll save the DB
-    const char * lastSlash = tmpFileName.FindLast( '/' );
-    lastSlash = lastSlash ? lastSlash : tmpFileName.FindLast( '\\' );
+    AStackString<> fileName( nodeGraphDBFile );
+    const char * lastSlash = fileName.FindLast( '/' );
+    lastSlash = lastSlash ? lastSlash : fileName.FindLast( '\\' );
     if ( lastSlash )
     {
-        AStackString<> pathOnly( tmpFileName.Get(), lastSlash );
+        AStackString<> pathOnly( fileName.Get(), lastSlash );
         if ( FileIO::EnsurePathExists( pathOnly ) == false )
         {
             FLOG_ERROR( "Failed to create directory for DepGraph saving '%s'", pathOnly.Get() );
@@ -337,7 +333,7 @@ bool FBuild::SaveDependencyGraph( const char * nodeGraphDBFile ) const
 
     // try to open the file
     FileStream fileStream;
-    if ( fileStream.Open( tmpFileName.Get(), FileStream::WRITE_ONLY ) == false )
+    if ( fileStream.Open( nodeGraphDBFile, FileStream::WRITE_ONLY ) == false )
     {
         // failing to open the dep graph for saving is a serious problem
         FLOG_ERROR( "Failed to open DepGraph for saving '%s'", nodeGraphDBFile );
@@ -352,27 +348,20 @@ bool FBuild::SaveDependencyGraph( const char * nodeGraphDBFile ) const
     }
     fileStream.Close();
 
-    // rename tmp file
-    if ( FileIO::FileMove( tmpFileName, AStackString<>( nodeGraphDBFile ) ) == false )
-    {
-        FLOG_ERROR( "Failed to rename temp DB file. Error: %s TmpFile: '%s'", LAST_ERROR_STR, tmpFileName.Get() );
-        return false;
-    }
-
     FLOG_VERBOSE( "Saving DepGraph Complete in %2.3fs", (double)t.GetElapsed() );
     return true;
 }
 
 // SaveDependencyGraph
 //------------------------------------------------------------------------------
-void FBuild::SaveDependencyGraph( IOStream & stream, const char* nodeGraphDBFile ) const
+void FBuild::SaveDependencyGraph( MemoryStream & stream, const char* nodeGraphDBFile ) const
 {
     m_DependencyGraph->Save( stream, nodeGraphDBFile );
 }
 
 // Build
 //------------------------------------------------------------------------------
-bool FBuild::Build( Node * nodeToBuild )
+/*virtual*/ bool FBuild::Build( Node * nodeToBuild )
 {
     ASSERT( nodeToBuild );
 
@@ -456,8 +445,11 @@ bool FBuild::Build( Node * nodeToBuild )
                 if ( stopping == false )
                 {
                     // free the network distribution system (if there is one)
-                    FDELETE m_Client;
-                    m_Client = nullptr;
+                    {
+                        MutexHolder mh( m_ClientLifetimeMutex );
+                        FDELETE m_Client;
+                        m_Client = nullptr;
+                    }
 
                     // wait for workers to exit.  Can still be building even though we've failed:
                     //  - only 1 failed node propagating up to root while others are not yet complete
@@ -525,7 +517,7 @@ bool FBuild::Build( Node * nodeToBuild )
     const float timeTaken = m_Timer.GetElapsed();
     m_BuildStats.m_TotalBuildTime = timeTaken;
 
-    m_BuildStats.OnBuildStop( nodeToBuild );
+    m_BuildStats.OnBuildStop( *m_DependencyGraph, nodeToBuild );
 
     return ( nodeToBuild->GetState() == Node::UP_TO_DATE );
 }
@@ -906,6 +898,14 @@ bool FBuild::CacheTrim() const
 
     OUTPUT( "- Cache not configured\n" );
     return false;
+}
+
+// GetNumWorkerConnections
+//------------------------------------------------------------------------------
+uint32_t FBuild::GetNumWorkerConnections() const
+{
+    MutexHolder mh( m_ClientLifetimeMutex );
+    return (uint32_t)( m_Client ? m_Client->GetNumConnections() : 0 );
 }
 
 //------------------------------------------------------------------------------

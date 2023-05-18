@@ -7,6 +7,7 @@
 
 // FBuildCore
 #include "Tools/FBuild/FBuildCore/FBuild.h"
+#include "Tools/FBuild/FBuildCore/Graph/DirectoryListNode.h"
 #include "Tools/FBuild/FBuildCore/Graph/NodeGraph.h"
 #include "Tools/FBuild/FBuildCore/Graph/VCXProjectNode.h"
 #include "Tools/FBuild/FBuildCore/Helpers/ProjectGeneratorBase.h"
@@ -42,6 +43,7 @@ private:
     void VCXProj_Folders() const;
     void VCXProj_ProjectRelativePaths() const;
     void VCXProj_ProjectRelativePaths2() const;
+    void VCXProj_InputPaths() const;
 
     // Solution
     void Solution_Empty() const;
@@ -81,6 +83,7 @@ REGISTER_TESTS_BEGIN( TestProjectGeneration )
     REGISTER_TEST( VCXProj_Folders )
     REGISTER_TEST( VCXProj_ProjectRelativePaths )
     REGISTER_TEST( VCXProj_ProjectRelativePaths2 )
+    REGISTER_TEST( VCXProj_InputPaths )
     REGISTER_TEST( Solution_Empty )
     REGISTER_TEST( Solution_SolutionRelativePaths )
     REGISTER_TEST( Solution_BuildAndDeploy_None )
@@ -170,20 +173,20 @@ void TestProjectGeneration::Test() const
 
     FBuild fBuild; // needed for NodeGraph::CleanPath
 
-    AStackString<> projectFile( "../../../../tmp/Test/ProjectGeneration/Core.vcxproj" );
+    AStackString<> projectFile( "../tmp/Test/ProjectGeneration/Core.vcxproj" );
     AStackString<> projectFileClean;
     NodeGraph::CleanPath( projectFile, projectFileClean );
 
     const AString & vcxproj = pg.GenerateVCXProj( projectFileClean, configs, fileTypes, projectImports );
     const AString & filters = pg.GenerateVCXProjFilters( projectFileClean );
 
-    TEST_ASSERT( FileIO::EnsurePathExists( AStackString<>( "../../../../tmp/Test/ProjectGeneration/" ) ) );
+    TEST_ASSERT( FileIO::EnsurePathExists( AStackString<>( "../tmp/Test/ProjectGeneration/" ) ) );
 
     FileStream f;
     TEST_ASSERT( f.Open( projectFileClean.Get(), FileStream::WRITE_ONLY ) );
     TEST_ASSERT( f.Write( vcxproj.Get(), vcxproj.GetLength() ) == vcxproj.GetLength() );
     f.Close();
-    TEST_ASSERT( f.Open( "../../../../tmp/Test/ProjectGeneration/Core.vcxproj.filters", FileStream::WRITE_ONLY ) );
+    TEST_ASSERT( f.Open( "../tmp/Test/ProjectGeneration/Core.vcxproj.filters", FileStream::WRITE_ONLY ) );
     TEST_ASSERT( f.Write( filters.Get(), filters.GetLength() ) == filters.GetLength() );
 }
 
@@ -199,7 +202,7 @@ void TestProjectGeneration::TestFunction() const
     FBuildTestOptions options;
     options.m_ConfigFile = "Tools/FBuild/FBuildTest/Data/TestProjectGeneration/fbuild.bff";
     options.m_ForceCleanBuild = true;
-    FBuild fBuild( options );
+    FBuildForTest fBuild( options );
     TEST_ASSERT( fBuild.Initialize() );
 
     // Delete old files from previous runs
@@ -210,6 +213,23 @@ void TestProjectGeneration::TestFunction() const
     // do build
     TEST_ASSERT( fBuild.Build( "TestSln" ) );
     TEST_ASSERT( fBuild.SaveDependencyGraph( "../tmp/Test/ProjectGeneration/fbuild.fdb" ) );
+
+    // Ensure node has a non-zero stamp. Although the node is ALWAYS_BUILD it should still
+    // have a valid stamp for downstream dependencies to consume
+    {
+        // Solution
+        Array< const Node * > nodes;
+        fBuild.GetNodesOfType( Node::SLN_NODE, nodes );
+        TEST_ASSERT( nodes.GetSize() == 1 );
+        TEST_ASSERT( nodes[ 0 ]->GetStamp() != 0 );
+    }
+    {
+        // VCXProj
+        Array< const Node * > nodes;
+        fBuild.GetNodesOfType( Node::VCXPROJECT_NODE, nodes );
+        TEST_ASSERT( nodes.GetSize() == 1 );
+        TEST_ASSERT( nodes[ 0 ]->GetStamp() != 0 );
+    }
 
     EnsureFileExists( project );
     EnsureFileExists( solution );
@@ -243,8 +263,8 @@ void TestProjectGeneration::TestFunction_NoRebuild() const
 
     // Projects and Solutions must be "built" every time, but only write files when they change
     // so record the time before and after
-    uint64_t dateTime1 = FileIO::GetFileLastWriteTime( project );
-    uint64_t dateTime2 = FileIO::GetFileLastWriteTime( filters );
+    const uint64_t dateTime1 = FileIO::GetFileLastWriteTime( project );
+    const uint64_t dateTime2 = FileIO::GetFileLastWriteTime( filters );
 
     // NTFS file resolution is 100ns and HFS is 1 second,
     // so sleep long enough to ensure an invalid write would modify the time
@@ -339,21 +359,21 @@ void TestProjectGeneration::TestFunction_Speed() const
     PathUtils::FixupFilePath( projectFileName );
 
     {
-        Timer t;
+        const Timer t;
         for ( size_t i = 0; i < 5; ++i )
         {
             pg.GenerateVCXProj( projectFileName, configs, fileTypes, projectImports );
         }
-        float time = t.GetElapsed();
+        const float time = t.GetElapsed();
         OUTPUT( "Gen vcxproj        : %2.3fs\n", (double)time );
     }
     {
-        Timer t;
+        const Timer t;
         for ( size_t i = 0; i < 5; ++i )
         {
             pg.GenerateVCXProjFilters( projectFileName );
         }
-        float time = t.GetElapsed();
+        const float time = t.GetElapsed();
         OUTPUT( "Gen vcxproj.filters: %2.3fs\n", (double)time );
     }
 }
@@ -531,6 +551,8 @@ void TestProjectGeneration::VCXProj_Intellisense_Check( const char * projectFile
             TEST_ASSERT( token.Find( "-std:c++17" ) );
             TEST_ASSERT( token.Find( "/std:c++14" ) );
             TEST_ASSERT( token.Find( "/std:latest" ) );
+            TEST_ASSERT( token.Find( "/wd1000" ) );
+            TEST_ASSERT( token.Find( "-wd2000" ) );
             additionalOptionsOk = true;
         }
     }
@@ -609,7 +631,15 @@ void TestProjectGeneration::XCodeProj_CodeSense_Check( const char * projectFile 
                 // Check that we separated path from the option name correctly.
                 TEST_ASSERT( ( pathStartPos == token.Get() ) || ( pathStartPos[ -1 ] == '/' ) );
 
-                const char * pathEndPos = token.GetEnd() - ( token.EndsWith( ',' ) ? 1 : 0 );
+                const char * pathEndPos = token.GetEnd();
+                if ( pathEndPos[ -1 ] == ',' )
+                {
+                    --pathEndPos;
+                }
+                if ( pathEndPos[ -1 ] == '"' )
+                {
+                    --pathEndPos;
+                }
                 includes.EmplaceBack( pathStartPos, pathEndPos );
             }
             continue;
@@ -1064,6 +1094,59 @@ void TestProjectGeneration::VCXProj_ProjectRelativePaths2() const
     }
 }
 
+// VCXProj_InputPaths
+//------------------------------------------------------------------------------
+void TestProjectGeneration::VCXProj_InputPaths() const
+{
+    // Initialize
+    FBuildTestOptions options;
+    options.m_ConfigFile = "Tools/FBuild/FBuildTest/Data/TestProjectGeneration/VCXProj_InputPaths/fbuild.bff";
+    FBuildForTest fBuild( options );
+    TEST_ASSERT( fBuild.Initialize() );
+
+    // Delete files from previous builds
+    EnsureFileDoesNotExist( "../tmp/Test/ProjectGeneration/VCXProj_InputPaths/Default.vcxproj" );
+    EnsureFileDoesNotExist( "../tmp/Test/ProjectGeneration/VCXProj_InputPaths/NoRecurse.vcxproj" );
+
+    // Do build
+    TEST_ASSERT( fBuild.Build( "All" ) );
+
+    // Find VCXProject nodes
+    Array<const Node *> nodes;
+    fBuild.GetNodesOfType( Node::VCXPROJECT_NODE, nodes );
+    TEST_ASSERT( nodes.GetSize() == 2 );
+
+    for ( const Node * projNode : nodes )
+    {
+        const Dependencies & deps = projNode->GetStaticDependencies();
+        TEST_ASSERT( deps.GetSize() == 1 );
+        TEST_ASSERT( deps[0].GetNode()->GetType() == Node::Type::DIRECTORY_LIST_NODE );
+        const DirectoryListNode * dirNode = deps[ 0 ].GetNode()->CastTo<DirectoryListNode>();
+        bool rootItemFound = false;
+        bool subdirItemFound = false;
+        for ( const FileIO::FileInfo & info : dirNode->GetFiles() )
+        {
+            rootItemFound |= info.m_Name.EndsWith( "root_item.cpp" );
+            subdirItemFound |= info.m_Name.EndsWith( "subdir_item.cpp" );
+        }
+
+        if ( projNode->GetName().EndsWith( "Default.vcxproj" ) )
+        {
+            TEST_ASSERT( dirNode->GetFiles().GetSize() == 2 );
+            TEST_ASSERT( rootItemFound && subdirItemFound );
+        }
+        else if ( projNode->GetName().EndsWith( "NoRecurse.vcxproj" ) )
+        {
+            TEST_ASSERT( dirNode->GetFiles().GetSize() == 1 );
+            TEST_ASSERT( rootItemFound && !subdirItemFound );
+        }
+        else
+        {
+            TEST_ASSERTM( false, "Unknown project found" );
+        }
+    }
+}
+
 // Solution_Empty
 //------------------------------------------------------------------------------
 void TestProjectGeneration::Solution_Empty() const
@@ -1369,7 +1452,7 @@ void TestProjectGeneration::XCode() const
     // Initialize
     FBuildTestOptions options;
     options.m_ConfigFile = "Tools/FBuild/FBuildTest/Data/TestProjectGeneration/xcodeproject.bff";
-    FBuild fBuild( options );
+    FBuildForTest fBuild( options );
     TEST_ASSERT( fBuild.Initialize() );
 
     // Delete files from previous builds
@@ -1377,6 +1460,16 @@ void TestProjectGeneration::XCode() const
 
     // do build
     TEST_ASSERT( fBuild.Build( "XCodeProj" ) );
+
+    // Ensure node has a non-zero stamp. Although the node is ALWAYS_BUILD it should still
+    // have a valid stamp for downstream dependencies to consume
+    {
+        // XCode Project
+        Array< const Node * > nodes;
+        fBuild.GetNodesOfType( Node::XCODEPROJECT_NODE, nodes );
+        TEST_ASSERT( nodes.GetSize() == 1 );
+        TEST_ASSERT( nodes[ 0 ]->GetStamp() != 0 );
+    }
 
     // Check stats
     //               Seen,  Built,  Type

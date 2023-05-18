@@ -3,14 +3,14 @@
 
 // Includes
 //------------------------------------------------------------------------------
-#include "TestFramework/UnitTest.h"
+#include "TestFramework/TestGroup.h"
 
 #include "Core/Containers/Array.h"
 #include "Core/Strings/AString.h"
 
 // TestArray
 //------------------------------------------------------------------------------
-class TestArray : public UnitTest
+class TestArray : public TestGroup
 {
 private:
     DECLARE_TESTS
@@ -25,6 +25,7 @@ private:
     void BeginAndEnd() const;
 
     void IndexOperator() const;
+    void GetIndexOf() const;
     void Top() const;
 
     void RangeBasedForLoop() const;
@@ -93,6 +94,7 @@ REGISTER_TESTS_BEGIN( TestArray )
     REGISTER_TEST( BeginAndEnd )
 
     REGISTER_TEST( IndexOperator )
+    REGISTER_TEST( GetIndexOf )
     REGISTER_TEST( Top )
 
     REGISTER_TEST( RangeBasedForLoop )
@@ -193,7 +195,7 @@ void TestArray::Construct_OtherArray() const
 void TestArray::Construct_Range() const
 {
     {
-        uint32_t u32s[ 4 ] = { 1, 2, 3, 4 };
+        const uint32_t u32s[ 4 ] = { 1, 2, 3, 4 };
 
         Array<uint32_t> array( u32s, u32s + 4 );
         CheckConsistency( array );
@@ -367,6 +369,29 @@ void TestArray::IndexOperator() const
     }
 }
 
+// GetIndexOf
+//------------------------------------------------------------------------------
+void TestArray::GetIndexOf() const
+{
+    // POD
+    {
+        Array<uint32_t> array( 2 );
+        array.Append( 1 );
+        array.Append( 2 );
+        TEST_ASSERT( array.GetIndexOf( &array[ 0 ] ) == 0 );
+        TEST_ASSERT( array.GetIndexOf( &array[ 1 ] ) == 1 );
+    }
+
+    // Complex Type
+    {
+        Array<AString> array( 2 );
+        array.Append( AString( "string1" ) );
+        array.Append( AString( "string2" ) );
+        TEST_ASSERT( array.GetIndexOf( &array[ 0 ] ) == 0 );
+        TEST_ASSERT( array.GetIndexOf( &array[ 1 ] ) == 1 );
+    }
+}
+
 // Top
 //------------------------------------------------------------------------------
 void TestArray::Top() const
@@ -400,7 +425,7 @@ void TestArray::RangeBasedForLoop() const
         array.Append( 1 );
         array.Append( 2 );
         uint32_t total = 0;
-        for ( uint32_t u : array ) // by value
+        for ( const uint32_t u : array ) // by value
         {
             total += u;
         }
@@ -1836,7 +1861,9 @@ void TestArray::MoveConstructorHelper() const
     TEST_EXPECT_ALLOCATION_EVENTS( s1, EXPECTED_ALLOCS )
 
     // Source string should be empty
+    PRAGMA_DISABLE_PUSH_MSVC(26800) // Use of a moved from object here is deliberate
     TEST_ASSERT( arrayA.IsEmpty() );
+    PRAGMA_DISABLE_POP_MSVC
 
     CheckConsistency( arrayA );
     CheckConsistency( arrayB );
@@ -1910,7 +1937,9 @@ void TestArray::MoveAssignmentHelper( const ELEM & value ) const
         TEST_EXPECT_ALLOCATION_EVENTS( s1, EXPECTED_ALLOCS )
 
         // Source string should be empty
+        PRAGMA_DISABLE_PUSH_MSVC(26800) // Use of a moved from object here is deliberate
         TEST_ASSERT( arrayA.IsEmpty() );
+        PRAGMA_DISABLE_POP_MSVC
 
         CheckConsistency( arrayA );
         CheckConsistency( arrayB );
@@ -1942,7 +1971,9 @@ void TestArray::MoveAssignmentHelper( const ELEM & value ) const
             arrayB = Move( (SRC_CAST&)( arrayA ) );
 
             // Source string should be empty
+            PRAGMA_DISABLE_PUSH_MSVC(26800) // Use of a moved from object here is deliberate
             TEST_ASSERT( arrayA.IsEmpty() );
+            PRAGMA_DISABLE_POP_MSVC
 
             CheckConsistency( arrayA );
             CheckConsistency( arrayB );

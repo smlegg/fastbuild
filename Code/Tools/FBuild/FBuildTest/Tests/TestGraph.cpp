@@ -29,6 +29,7 @@
 #include "Core/FileIO/MemoryStream.h"
 #include "Core/FileIO/PathUtils.h"
 #include "Core/Math/Conversions.h"
+#include "Core/Math/xxHash.h"
 #include "Core/Process/Thread.h"
 #include "Core/Strings/AStackString.h"
 #include "Core/Time/Timer.h"
@@ -55,6 +56,7 @@ private:
     void BFFDirtied() const;
     void DBVersionChanged() const;
     void FixupErrorPaths() const;
+    void CyclicDependency() const;
 };
 
 // Register Tests
@@ -75,6 +77,7 @@ REGISTER_TESTS_BEGIN( TestGraph )
     REGISTER_TEST( BFFDirtied )
     REGISTER_TEST( DBVersionChanged )
     REGISTER_TEST( FixupErrorPaths )
+    REGISTER_TEST( CyclicDependency )
 REGISTER_TESTS_END
 
 // NodeTestHelper
@@ -113,15 +116,15 @@ void TestGraph::TestNodeTypes() const
     FBuild fb;
     NodeGraph ng;
 
-    FileNode * fn = ng.CreateFileNode( AStackString<>( "file" ) );
+    const FileNode * fn = ng.CreateFileNode( AStackString<>( "file" ) );
     TEST_ASSERT( fn->GetType() == Node::FILE_NODE );
     TEST_ASSERT( FileNode::GetTypeS() == Node::FILE_NODE );
 
     {
         #if defined( __WINDOWS__ )
-            CompilerNode * cn = ng.CreateCompilerNode( AStackString<>( "c:\\cl.exe" ) );
+            const CompilerNode * cn = ng.CreateCompilerNode( AStackString<>( "c:\\cl.exe" ) );
         #else
-            CompilerNode * cn = ng.CreateCompilerNode( AStackString<>( "/usr/bin/gcc" ) );
+            const CompilerNode * cn = ng.CreateCompilerNode( AStackString<>( "/usr/bin/gcc" ) );
         #endif
         TEST_ASSERT( cn->GetType() == Node::COMPILER_NODE );
         TEST_ASSERT( AStackString<>( "Compiler" ) == cn->GetTypeName() );
@@ -129,9 +132,9 @@ void TestGraph::TestNodeTypes() const
 
     {
         #if defined( __WINDOWS__ )
-            Node * n = ng.CreateCopyFileNode( AStackString<>( "c:\\dummy" ) );
+            const Node * n = ng.CreateCopyFileNode( AStackString<>( "c:\\dummy" ) );
         #else
-            Node * n = ng.CreateCopyFileNode( AStackString<>( "/dummy/dummy" ) );
+            const Node * n = ng.CreateCopyFileNode( AStackString<>( "/dummy/dummy" ) );
         #endif
         TEST_ASSERT( n->GetType() == Node::COPY_FILE_NODE );
         TEST_ASSERT( CopyFileNode::GetTypeS() == Node::COPY_FILE_NODE );
@@ -139,9 +142,9 @@ void TestGraph::TestNodeTypes() const
     }
 
     #if defined( __WINDOWS__ )
-        DirectoryListNode * dn = ng.CreateDirectoryListNode( AStackString<>( "path\\|*.cpp|false|" ) );
+        const DirectoryListNode * dn = ng.CreateDirectoryListNode( AStackString<>( "path\\|*.cpp|false|" ) );
     #else
-        DirectoryListNode * dn = ng.CreateDirectoryListNode( AStackString<>( "path/|*.cpp|false|" ) );
+        const DirectoryListNode * dn = ng.CreateDirectoryListNode( AStackString<>( "path/|*.cpp|false|" ) );
     #endif
     TEST_ASSERT( dn->GetType() == Node::DIRECTORY_LIST_NODE );
     TEST_ASSERT( DirectoryListNode::GetTypeS() == Node::DIRECTORY_LIST_NODE );
@@ -149,9 +152,9 @@ void TestGraph::TestNodeTypes() const
 
     {
         #if defined( __WINDOWS__ )
-            Node * n = ng.CreateExecNode( AStackString<>( "c:\\execdummy" ) );
+            const Node * n = ng.CreateExecNode( AStackString<>( "c:\\execdummy" ) );
         #else
-            Node * n = ng.CreateExecNode( AStackString<>( "/execdummy/execdummy" ) );
+            const Node * n = ng.CreateExecNode( AStackString<>( "/execdummy/execdummy" ) );
         #endif
         TEST_ASSERT( n->GetType() == Node::EXEC_NODE );
         TEST_ASSERT( ExecNode::GetTypeS() == Node::EXEC_NODE );
@@ -159,9 +162,9 @@ void TestGraph::TestNodeTypes() const
     }
     {
         #if defined( __WINDOWS__ )
-            Node * n = ng.CreateLibraryNode( AStackString<>( "c:\\library.lib" ) );
+            const Node * n = ng.CreateLibraryNode( AStackString<>( "c:\\library.lib" ) );
         #else
-            Node * n = ng.CreateLibraryNode( AStackString<>( "/library/library.a" ) );
+            const Node * n = ng.CreateLibraryNode( AStackString<>( "/library/library.a" ) );
         #endif
         TEST_ASSERT( n->GetType() == Node::LIBRARY_NODE );
         TEST_ASSERT( LibraryNode::GetTypeS() == Node::LIBRARY_NODE );
@@ -169,16 +172,16 @@ void TestGraph::TestNodeTypes() const
     }
     {
         #if defined( __WINDOWS__ )
-            Node * n = ng.CreateObjectNode( AStackString<>( "c:\\object.lib" ) );
+            const Node * n = ng.CreateObjectNode( AStackString<>( "c:\\object.lib" ) );
         #else
-            Node * n = ng.CreateObjectNode( AStackString<>( "/library/object.o" ) );
+            const Node * n = ng.CreateObjectNode( AStackString<>( "/library/object.o" ) );
         #endif
         TEST_ASSERT( n->GetType() == Node::OBJECT_NODE );
         TEST_ASSERT( ObjectNode::GetTypeS() == Node::OBJECT_NODE );
         TEST_ASSERT( AStackString<>( "Object" ) == n->GetTypeName() );
     }
     {
-        Node * n = ng.CreateAliasNode( AStackString<>( "alias" ) );
+        const Node * n = ng.CreateAliasNode( AStackString<>( "alias" ) );
         TEST_ASSERT( n->GetType() == Node::ALIAS_NODE );
         TEST_ASSERT( AliasNode::GetTypeS() == Node::ALIAS_NODE );
         TEST_ASSERT( AStackString<>( "Alias" ) == n->GetTypeName() );
@@ -206,7 +209,7 @@ void TestGraph::TestNodeTypes() const
         TEST_ASSERT( AStackString<>( "Exe" ) == n->GetTypeName() );
     }
     {
-        Node * n = ng.CreateUnityNode( AStackString<>( "Unity" ) );
+        const Node * n = ng.CreateUnityNode( AStackString<>( "Unity" ) );
         TEST_ASSERT( n->GetType() == Node::UNITY_NODE );
         TEST_ASSERT( UnityNode::GetTypeS() == Node::UNITY_NODE );
         TEST_ASSERT( AStackString<>( "Unity" ) == n->GetTypeName() );
@@ -407,22 +410,30 @@ void TestGraph::TestCleanPath() const
     CHECK( "..\\file.dat",          "C:\\Windows\\file.dat",            "/tmp/file.dat" )
     CHECK( "..\\..\\file.dat",      "C:\\file.dat",                     "/file.dat" )
     CHECK( "..\\..\\..\\file.dat",  "C:\\file.dat",                     "/file.dat" )
+    CHECK( "folder\\..\\",          "C:\\Windows\\System32\\",          "/tmp/subDir/" )
+    CHECK( "folder\\..",            "C:\\Windows\\System32\\",          "/tmp/subDir/" )
 
     //   "/../"
     CHECK( "file.dat",              "C:\\Windows\\System32\\file.dat",  "/tmp/subDir/file.dat" )
     CHECK( "../file.dat",           "C:\\Windows\\file.dat",            "/tmp/file.dat" )
     CHECK( "../../file.dat",        "C:\\file.dat",                     "/file.dat" )
     CHECK( "../../../file.dat",     "C:\\file.dat",                     "/file.dat" )
+    CHECK( "folder/../",            "C:\\Windows\\System32\\",          "/tmp/subDir/" )
+    CHECK( "folder/..",             "C:\\Windows\\System32\\",          "/tmp/subDir/" )
 
     //   "\.\"
     CHECK( ".\\file.dat",           "C:\\Windows\\System32\\file.dat",          "/tmp/subDir/file.dat" )
     CHECK( "folder\\.\\file.dat",   "C:\\Windows\\System32\\folder\\file.dat",  "/tmp/subDir/folder/file.dat" )
     CHECK( ".\\.\\.\\file.dat",     "C:\\Windows\\System32\\file.dat",          "/tmp/subDir/file.dat" )
+    CHECK( "folder\\.\\",           "C:\\Windows\\System32\\folder\\",          "/tmp/subDir/folder/" )
+    CHECK( "folder\\.",             "C:\\Windows\\System32\\folder\\",          "/tmp/subDir/folder/" )
 
     //   "/./"
     CHECK( "./file.dat",            "C:\\Windows\\System32\\file.dat",          "/tmp/subDir/file.dat" )
     CHECK( "folder/./file.dat",     "C:\\Windows\\System32\\folder\\file.dat",  "/tmp/subDir/folder/file.dat" )
     CHECK( "./././file.dat",        "C:\\Windows\\System32\\file.dat",          "/tmp/subDir/file.dat" )
+    CHECK( "folder/./",             "C:\\Windows\\System32\\folder\\",          "/tmp/subDir/folder/" )
+    CHECK( "folder/.",              "C:\\Windows\\System32\\folder\\",          "/tmp/subDir/folder/" )
 
     //   full path '\'
     #if defined( __WINDOWS__ )
@@ -587,7 +598,7 @@ void TestGraph::TestDeepGraph() const
     }
 
     {
-        Timer t;
+        const Timer t;
 
         // no op build
         FBuild fBuild( options );
@@ -702,40 +713,53 @@ void TestGraph::DBCorrupt() const
     EnsureFileDoesNotExist( dbFile );
     EnsureFileDoesNotExist( dbFileCorrupt );
 
-    // Create a DB
+    // Test corruption at various places in the file
+    static_assert( sizeof(NodeGraphHeader) == 16, "Update test for DB format change" );
+    static const uint32_t corruptionOffsets[] =
     {
-        FBuild fBuild( options );
-        TEST_ASSERT( fBuild.Initialize() );
-        TEST_ASSERT( fBuild.SaveDependencyGraph( dbFile ) );
-    }
+        0,      // Header - magic identifier
+        8,      // Header - hash of content
+        128,    // Arbitrary position in the file
+    };
 
     // Corrupt the DB
+    for ( const uint32_t corruptionOffset : corruptionOffsets )
     {
-        FileStream f;
+        // Create a DB
+        {
+            FBuild fBuild( options );
+            TEST_ASSERT( fBuild.Initialize() );
+            TEST_ASSERT( fBuild.SaveDependencyGraph( dbFile ) );
+        }
 
-        // Read DB into memory
-        TEST_ASSERT( f.Open( dbFile, FileStream::READ_ONLY ) );
-        AString buffer;
-        buffer.SetLength( (uint32_t)f.GetFileSize() );
-        TEST_ASSERT( f.ReadBuffer( buffer.Get(), f.GetFileSize() ) == f.GetFileSize() );
-        f.Close(); // Explicit close so we can re-open
+        // Corrupt the DB
+        {
+            FileStream f;
 
-        // Corrupt it
-        buffer[ 0 ] = 'X';
+            // Read DB into memory
+            TEST_ASSERT( f.Open( dbFile, FileStream::READ_ONLY ) );
+            AString buffer;
+            buffer.SetLength( (uint32_t)f.GetFileSize() );
+            TEST_ASSERT( f.ReadBuffer( buffer.Get(), f.GetFileSize() ) == f.GetFileSize() );
+            f.Close(); // Explicit close so we can re-open
 
-        // Save corrupt DB
-        TEST_ASSERT( f.Open( dbFile, FileStream::WRITE_ONLY ) );
-        TEST_ASSERT( f.WriteBuffer( buffer.Get(), buffer.GetLength() ) );
-    }
+            // Corrupt it by flipping some bits
+            buffer[ corruptionOffset ] = ~buffer[ corruptionOffset ];
 
-    // Initialization should report a warning, but still work
-    {
-        FBuild fBuild( options );
-        TEST_ASSERT( fBuild.Initialize( dbFile ) == true );
-        TEST_ASSERT( GetRecordedOutput().Find( "Database corrupt" ) );
+            // Save corrupt DB
+            TEST_ASSERT( f.Open( dbFile, FileStream::WRITE_ONLY ) );
+            TEST_ASSERT( f.WriteBuffer( buffer.Get(), buffer.GetLength() ) );
+        }
 
-        // Backup of corrupt DB should exit
-        EnsureFileExists( dbFileCorrupt );
+        // Initialization should report a warning, but still work
+        {
+            FBuild fBuild( options );
+            TEST_ASSERT( fBuild.Initialize( dbFile ) == true );
+            TEST_ASSERT( GetRecordedOutput().Find( "Database corrupt" ) );
+
+            // Backup of corrupt DB should exit
+            EnsureFileExists( dbFileCorrupt );
+        }
     }
 }
 
@@ -781,7 +805,7 @@ void TestGraph::BFFDirtied() const
 
     // Modify file, ensuring filetime has changed (different file systems have different resolutions)
     const uint64_t originalTime = FileIO::GetFileLastWriteTime( AStackString<>( copyOfBFF ) );
-    Timer t;
+    const Timer t;
     uint32_t sleepTimeMS = 2;
     for ( ;; )
     {
@@ -835,11 +859,12 @@ void TestGraph::DBVersionChanged() const
 {
     // Generate a fake old version headers
     NodeGraphHeader header;
+    header.SetContentHash( xxHash::Calc64( "", 0 ) );
     MemoryStream ms;
     ms.WriteBuffer( &header, sizeof( header ) );
 
     // Since we're poking this, we want to know if the layout ever changes somehow
-    TEST_ASSERT( ms.GetFileSize() == 4 );
+    TEST_ASSERT( ms.GetFileSize() == 16 );
     TEST_ASSERT( ( (const uint8_t *)ms.GetDataMutable() )[ 3 ] == NodeGraphHeader::NODE_GRAPH_CURRENT_VERSION );
 
     ( (uint8_t *)ms.GetDataMutable() )[ 3 ] = ( NodeGraphHeader::NODE_GRAPH_CURRENT_VERSION - 1 );
@@ -897,16 +922,26 @@ void TestGraph::FixupErrorPaths() const
         fixup = path; \
         NodeTestHelper::FixupPathForVSIntegration( fixup ); \
         do { \
-            if ( fixup.BeginsWith( workingDir ) == false ) \
-            { \
-                TEST_ASSERTM( false, "Path was not fixed up as expected.\n" \
-                                     "Original           : %s\n" \
-                                     "Returned           : %s\n" \
-                                     "Expected BeginsWith: %s\n", \
-                                     original.Get(), \
-                                     fixup.Get(), \
-                                     workingDir.Get() ); \
-            } \
+           if ( ( original.Find( "/mnt/" ) == nullptr ) && \
+                ( fixup.BeginsWith( workingDir ) == false ) ) \
+           { \
+               TEST_ASSERTM( false, "Path was not fixed up as expected.\n" \
+                                       "Original           : %s\n" \
+                                       "Returned           : %s\n" \
+                                       "Expected BeginsWith: %s\n", \
+                                       original.Get(), \
+                                       fixup.Get(), \
+                                       workingDir.Get() ); \
+           } \
+           else if ( fixup.Find( "/mnt/" ) != nullptr ) \
+           { \
+               TEST_ASSERTM( false, "Path was not fixed up as expected.\n" \
+                                       "Original           : %s\n" \
+                                       "Returned           : %s\n" \
+                                       "Unexpected         : Contains '/mnt/'\n", \
+                                       original.Get(), \
+                                       fixup.Get() ); \
+           } \
         } while ( false )
 
     // GCC/Clang style
@@ -919,7 +954,55 @@ void TestGraph::FixupErrorPaths() const
     // VBCC Style
     TEST_FIXUP( "warning 55 in line 23 of \"Core/Mem/Mem.h\": some warning text" );
 
+    // WSL
+    TEST_FIXUP( "/mnt/c/p4/depot/Code/Core/Mem/Mem.h:23:1: warning: some warning text" );
+
     #undef TEST_FIXUP
+}
+
+// CyclicDependency
+//------------------------------------------------------------------------------
+void TestGraph::CyclicDependency() const
+{
+    // Statically defined cyclice dependencies are detected at BFF parse time,
+    // but additional ones can be created at build time, so have to be detected
+    // at build time.
+    //
+    // This test runs a build step that outputs an output into its own source
+    // directory the first time it has been run, so that the second time it is
+    // run there is a cyclic dependency.
+
+    const char * const bffFile = "Tools/FBuild/FBuildTest/Data/TestGraph/CyclicDependency/fbuild.bff";
+    const char * const dbFile = "../tmp/Test/Graph/CyclicDependency/fbuild.db";
+
+    FBuildTestOptions options;
+    options.m_ConfigFile = bffFile;
+
+    // Delete the file if this test has been run before, so that the test is consistent
+    FileIO::FileDelete( "../tmp/Test/Graph/CyclicDependency/file.x" );
+
+    // First run
+    {
+        // Initialization is ok because the problem occurs at build time
+        FBuild fBuild( options );
+        TEST_ASSERT( fBuild.Initialize() == true );
+
+        // First build passes, but outputs data into the source dir that is a problem next time
+        TEST_ASSERT( fBuild.Build( "all" ) );
+        TEST_ASSERT( fBuild.SaveDependencyGraph( dbFile ) );
+    }
+
+    // Second run
+    {
+        // Initialize
+        FBuild fBuild( options );
+        TEST_ASSERT( fBuild.Initialize( dbFile ) == true );
+
+        // Second build detects the bad dependency created by the first invocation
+        // and fails
+        TEST_ASSERT( fBuild.Build( "all" ) == false );
+        TEST_ASSERT( GetRecordedOutput().Find( "Error: Cyclic dependency detected" ) );
+    }
 }
 
 //------------------------------------------------------------------------------

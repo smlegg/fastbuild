@@ -3,7 +3,7 @@
 
 // Includes
 //------------------------------------------------------------------------------
-#include "TestFramework/UnitTest.h"
+#include "TestFramework/TestGroup.h"
 
 // main
 //------------------------------------------------------------------------------
@@ -21,6 +21,7 @@ int main( int, char *[] )
     REGISTER_TESTGROUP( TestCompiler )
     REGISTER_TESTGROUP( TestCompressor )
     REGISTER_TESTGROUP( TestCopy )
+    REGISTER_TESTGROUP( TestDependencies )
     REGISTER_TESTGROUP( TestDistributed )
     REGISTER_TESTGROUP( TestDLL )
     REGISTER_TESTGROUP( TestError )
@@ -55,9 +56,9 @@ int main( int, char *[] )
         REGISTER_TESTGROUP( TestZW )
     #endif
 
-    UnitTestManager utm;
+    TestManager utm;
 
-    bool allPassed = utm.RunTests();
+    const bool allPassed = utm.RunTests();
 
     return allPassed ? 0 : -1;
 }
