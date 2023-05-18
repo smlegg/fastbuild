@@ -37,8 +37,8 @@
             Print( '-----------------------------------------------------------------------' )
             Print( '- Unable to auto-detect VS2019 - please specify installation manually -' )
             Print( '-----------------------------------------------------------------------' )
-            .VS2019_BasePath        = .Set_Path_Here    // <-- Set path here
-            .VS2019_Version         = .Set_Version_Here // <-- Set version here
+            .VS2019_BasePath        = 'C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC'    // <-- Set path here
+            .VS2019_Version         = '14.29.30133' // <-- Set version here
         #endif
     #endif
 #endif
@@ -159,7 +159,7 @@ Compiler( 'Compiler-VS2019-x64' )
 
 // VisualStudioSettings
 //------------------------------------------------------------------------------
-.VisualStudioSettings_VS2019 = 
+.VisualStudioSettings_VS2019 =
 [
     .VS_Version                     = .VS2019_Version
     .VS_Version_HumanReadable       = '2019'
