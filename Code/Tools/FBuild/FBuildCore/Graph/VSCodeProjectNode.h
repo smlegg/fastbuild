@@ -18,7 +18,7 @@ class VSCodeProjectNode : public Node
 public:
 	explicit VSCodeProjectNode();
 	virtual bool Initialize( NodeGraph & nodeGraph, const BFFToken * iter, const Function * function ) override;
-	virtual ~VSCodeProjectNode();
+	virtual ~VSCodeProjectNode() override;
 
 	virtual bool IsAFile() const override { return false; }
 

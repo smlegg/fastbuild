@@ -17,7 +17,7 @@ class VSCodeCppPropertiesNode : public FileNode
 public:
 	explicit VSCodeCppPropertiesNode();
 	virtual bool Initialize( NodeGraph & nodeGraph, const BFFToken * iter, const Function * function ) override;
-	virtual ~VSCodeCppPropertiesNode();
+	virtual ~VSCodeCppPropertiesNode() override;
 
 	static inline Node::Type GetTypeS() { return Node::VSCODE_CPP_PROPERTIES_NODE; }
 
