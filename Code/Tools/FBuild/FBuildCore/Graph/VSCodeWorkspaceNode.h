@@ -31,7 +31,7 @@ class VSCodeWorkspaceNode : public FileNode
 public:
 	explicit VSCodeWorkspaceNode();
     virtual bool Initialize( NodeGraph & nodeGraph, const BFFToken * iter, const Function * function ) override;
-	virtual ~VSCodeWorkspaceNode();
+	virtual ~VSCodeWorkspaceNode() override;
 
 	static inline Node::Type GetTypeS() { return Node::VSCODEWORKSPACE_NODE; }
 private:
