@@ -20,7 +20,7 @@ public:
 	virtual bool Initialize( NodeGraph & nodeGraph, const BFFToken * iter, const Function * function ) override;
 	virtual ~VSCodeProjectNode();
 
-	virtual bool IsAFile() const { return false; }
+	virtual bool IsAFile() const override { return false; }
 
 	static inline Node::Type GetTypeS() { return Node::VSCODEPROJECT_NODE; }
 

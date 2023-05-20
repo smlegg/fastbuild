@@ -16,7 +16,7 @@ class FunctionVSCodeProject : public Function
 {
 public:
 	explicit		FunctionVSCodeProject();
-	inline virtual ~FunctionVSCodeProject() = default;
+	inline virtual ~FunctionVSCodeProject() override = default;
 
 protected:
 	virtual bool AcceptsHeader() const override;
