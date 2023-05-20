@@ -16,6 +16,7 @@
 REFLECT_STRUCT_BEGIN_BASE( VSCodeWorkspaceFolder )
 	REFLECT( m_Path, "Path", MetaPath() )
 	REFLECT( m_Name, "Name", MetaOptional() )
+	REFLECT_ARRAY_OF_STRUCT( m_Configs, "CppConfigs", VSCodeCppConfig, MetaOptional() )
 REFLECT_END( VSCodeWorkspaceFolder )
 
 REFLECT_NODE_BEGIN( VSCodeWorkspaceNode, Node, MetaName("WorkspaceOutput") + MetaFile() )
@@ -92,7 +93,7 @@ VSCodeWorkspaceNode::~VSCodeWorkspaceNode() = default;
 	// depend on the input nodes
 	for ( VSCodeProjectNode * project : m_ProjectNodes )
 	{
-		m_StaticDependencies.Append( Dependency( project ) );
+		m_StaticDependencies.Add( project );
 	}
 
 	return true;

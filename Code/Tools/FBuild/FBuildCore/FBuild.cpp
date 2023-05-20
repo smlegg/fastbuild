@@ -749,6 +749,7 @@ void FBuild::DisplayTargetList( bool showHidden ) const
             case Node::LIST_DEPENDENCIES_NODE: break;
    			case Node::VSCODEPROJECT_NODE:		break;
 			case Node::VSCODEWORKSPACE_NODE:	break;
+			case Node::VSCODE_CPP_PROPERTIES_NODE:	break;
             case Node::NUM_NODE_TYPES:      ASSERT( false );                        break;
         }
         if ( displayName && ( !hidden || showHidden ) )

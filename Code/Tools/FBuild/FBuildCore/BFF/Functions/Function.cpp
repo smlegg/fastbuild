@@ -31,6 +31,7 @@
 #include "FunctionXCodeProject.h"
 #include "FunctionVSCodeProject.h"
 #include "FunctionVSCodeWorkspace.h"
+#include "FunctionVSCodeCppProperties.h"
 
 #include "Tools/FBuild/FBuildCore/BFF/BFFParser.h"
 #include "Tools/FBuild/FBuildCore/BFF/BFFStackFrame.h"
@@ -123,6 +124,7 @@ Function::~Function() = default;
     g_Functions.Append( FNEW( FunctionXCodeProject ) );
     g_Functions.Append( FNEW( FunctionVSCodeProject ) );
 	g_Functions.Append( FNEW( FunctionVSCodeWorkspace ) );
+    g_Functions.Append( FNEW( FunctionVSCodeCppProperties ));
 
 }
 

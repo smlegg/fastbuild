@@ -7,10 +7,7 @@
 
 // FBuildCore
 #include "Tools/FBuild/FBuildCore/Helpers/VSCodeWorkspaceGenerator.h"
-
-// Forward Declarations
-//------------------------------------------------------------------------------
-class VSCodeProjectNode;
+#include "Tools/FBuild/FBuildCore/Graph/VSCodeCppConfig.h"
 
 // VSCodeFolder
 //-----------------------------------------------------------------------------
@@ -23,6 +20,7 @@ public:
 
 	AString m_Path;
 	AString m_Name;
+	Array< VSCodeCppConfig > m_Configs;
 };
 
 // VSCodeWorkspaceNode

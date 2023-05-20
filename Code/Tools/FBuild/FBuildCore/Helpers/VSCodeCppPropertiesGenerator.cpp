@@ -1,4 +1,4 @@
-// VSCodeProjectGenerator
+// VSCodeConfigGenerator
 //------------------------------------------------------------------------------
 
 // Includes
@@ -12,32 +12,28 @@
 #include "Tools/FBuild/FBuildCore/Graph/NodeGraph.h"
 #include "Tools/FBuild/FBuildCore/Graph/ObjectListNode.h"
 #include "Tools/FBuild/FBuildCore/Graph/VSCodeProjectNode.h"
+#include "Tools/FBuild/FBuildCore/Helpers/VSCodeCppPropertiesGenerator.h"
 #include "Tools/FBuild/FBuildCore/Helpers/ProjectGeneratorBase.h" // TODO:C Remove when VSProjectGenerator derives from ProjectGeneratorBase
 
 // CONSTRUCTOR
 //------------------------------------------------------------------------------
-VSCodeProjectGenerator::VSCodeProjectGenerator()
+VSCodeCppPropertiesGenerator::VSCodeCppPropertiesGenerator()
 {
 }
 
 // DESTRUCTOR
 //------------------------------------------------------------------------------
-VSCodeProjectGenerator::~VSCodeProjectGenerator() = default;
+VSCodeCppPropertiesGenerator::~VSCodeCppPropertiesGenerator() = default;
 
 // Generate
 //------------------------------------------------------------------------------
-const AString & VSCodeProjectGenerator::Generate( const Array< VSCodeProjectConfig > & configs )
+void VSCodeCppPropertiesGenerator::GenerateCppConfigs( const Array< VSCodeCppConfig > & configs, const char *indent )
 {
-	m_Tmp.SetReserved( MEGABYTE );
-	m_Tmp.SetLength( 0 );
+	Write( "%s\"configurations\":\n", indent );
+	Write( "%s[\n", indent );
 
-	Write( "{\n" );
-
-	Write( "\t\"configurations\":\n" );
-	Write( "\t[\n" );
-
-	const VSCodeProjectConfig * const cEnd = configs.End();
-	for ( const VSCodeProjectConfig * cIt = configs.Begin(); cIt != cEnd; ++cIt )
+	const VSCodeCppConfig * const cEnd = configs.End();
+	for ( const VSCodeCppConfig * cIt = configs.Begin(); cIt != cEnd; ++cIt )
 	{
 		const ObjectListNode * oln = nullptr;
 		if ( cIt->m_IncludePath.IsEmpty() || cIt->m_Defines.IsEmpty() )
@@ -49,23 +45,32 @@ const AString & VSCodeProjectGenerator::Generate( const Array< VSCodeProjectConf
 		{
 			Write( ",\n" );
 		}
-		Write( "\t\t{\n" );
+		Write( "%s\t{\n", indent );
 
-		Write( "\t\t\t\"name\": \"%s\",\n", cIt->m_Config.Get() );
+		Write( "%s\t\t\"name\": \"%s\",\n", indent, cIt->m_Config.Get() );
+
+		if ( cIt->m_ConfigurationProvider.IsEmpty() == false )
+		{
+			Write( "%s\t\t\t\"configurationProvider\": \"%s\",\n", indent, cIt->m_ConfigurationProvider.Get() );
+		}
 
 		if ( cIt->m_Compiler.IsEmpty() == false )
 		{
 			AString compiler(cIt->m_Compiler);
 			compiler.Replace( '\\', '/' );
-			Write( "\t\t\t\"compilerPath\": \"%s\",\n", compiler.Get() );
+			Write( "%s\t\t\"compilerPath\": \"%s\",\n", indent, compiler.Get() );
 		}
 
 		if ( cIt->m_CompilerArgs.IsEmpty() == false )
 		{
-			Write( "\t\t\t\"compilerArgs\":\n" );
-			Write( "\t\t\t[\n" );
-			WriteStringList( cIt->m_CompilerArgs, "\t\t\t\t" );
-			Write( "\t\t\t],\n" );
+			Write( "%s\t\t\"compilerArgs\":\n", indent );
+			Write( "%s\t\t[\n", indent );
+
+			AString compilerArgsIndent(indent);
+			compilerArgsIndent += "\t\t\t";
+			WriteStringList( cIt->m_CompilerArgs, compilerArgsIndent.Get() );
+
+			Write( "%s\t\t],\n", indent );
 		}
 
 		const Array< AString >* includePaths;
@@ -87,16 +92,22 @@ const AString & VSCodeProjectGenerator::Generate( const Array< VSCodeProjectConf
 			includePaths = &extractedIncludePaths;
 		}
 
-		Write( "\t\t\t\"includePath\":\n" );
-		Write( "\t\t\t[\n" );
-		WritePathList( *includePaths, "\t\t\t\t" );
-		Write( "\t\t\t],\n" );
+		Write( "%s\t\t\"includePath\":\n", indent );
+		Write( "%s\t\t[\n", indent );
 
-		Write( "\t\t\t\"defines\":\n" );
-		Write( "\t\t\t[\n" );
+		AString includePathsIndent(indent);
+		includePathsIndent += "\t\t\t";
+		WritePathList( *includePaths, includePathsIndent.Get() );
+
+		Write( "%s\t\t],\n", indent );
+
+		Write( "%s\t\t\"defines\":\n", indent );
+		Write( "%s\t\t[\n", indent );
 		if ( cIt->m_Defines.IsEmpty() == false )
 		{
-			WriteStringList( cIt->m_Defines, "\t\t\t\t" );
+			AString definesIndent(indent);
+			definesIndent += "\t\t\t";
+			WriteStringList( cIt->m_Defines, definesIndent.Get() );
 		}
 		else
 		{
@@ -108,25 +119,33 @@ const AString & VSCodeProjectGenerator::Generate( const Array< VSCodeProjectConf
 
 				Array< AString > defines;
 				ProjectGeneratorBase::ExtractIntellisenseOptions( oln->GetCompilerOptions(), prefixes, defines, false, false );
-				WriteStringList( defines, "\t\t\t\t" );
+
+				AString definesIndent(indent);
+				definesIndent += "\t\t\t";
+				WriteStringList( defines, definesIndent.Get() );
 			}
 		}
-		Write( "\n\t\t\t],\n" );
+		Write( "\n%s\t\t],\n", indent );
 
 		if ( cIt->m_ForcedInclude.IsEmpty() == false )
 		{
 			Array< AString > resolved;
 			ResolveIncludeFiles( cIt->m_ForcedInclude, *includePaths, resolved );
 
-			Write( "\t\t\t\"forcedInclude\":\n" );
-			Write( "\t\t\t[\n" );
-			WritePathList( resolved, "\t\t\t\t\t" );
-			Write( "\n\t\t\t\t],\n" );
+			Write( "%s\t\t\"forcedInclude\":\n", indent );
+			Write( "%s\t\t[\n", indent );
+
+
+			AString includesIndent(indent);
+			includesIndent += "\t\t\t\t";
+			WritePathList( resolved, includesIndent.Get() );
+
+			Write( "\n%s\t\t\t],\n", indent );
 		}
 
 		if ( cIt->m_IntellisenseMode.IsEmpty() == false )
 		{
-			Write( "\t\t\t\"intelliSenseMode\": \"%s\",\n", cIt->m_IntellisenseMode.Get() );
+			Write( "%s\t\t\"intelliSenseMode\": \"%s\",\n", indent, cIt->m_IntellisenseMode.Get() );
 		}
 
 		if ( oln )
@@ -140,33 +159,49 @@ const AString & VSCodeProjectGenerator::Generate( const Array< VSCodeProjectConf
 
 			if ( standard.IsEmpty() == false )
 			{
-				Write( "\t\t\t\"cppStandard\": \"%s\",\n", standard[0].Get() );
+				Write( "%s\t\t\"cppStandard\": \"%s\",\n", indent, standard[0].Get() );
 			}
 		}
 
-		Write( "\t\t\t\"browse\":\n" );
-		Write( "\t\t\t{\n" );
+		Write( "%s\t\t\"browse\":\n", indent );
+		Write( "%s\t\t{\n", indent );
 
-		Write( "\t\t\t\t\"path\":\n" );
-		Write( "\t\t\t\t[\n" );
-		WritePathList( *includePaths, "\t\t\t\t\t" );
-		Write( "\n\t\t\t\t],\n" );
+		Write( "%s\t\t\t\"path\":\n", indent );
+		Write( "%s\t\t\t[\n", indent );
+
+		AString browseIncludesIndent(indent);
+		browseIncludesIndent += "\t\t\t\t";
+		WritePathList( *includePaths, browseIncludesIndent.Get() );
+
+		Write( "\n%s\t\t\t],\n", indent );
 
 		if ( cIt->m_DatabaseFilename.IsEmpty() == false )
 		{
-			Write( "\t\t\t\t\"databaseFilename\": \"%s\",\n", cIt->m_DatabaseFilename.Get() );
+			Write( "%s\t\t\t\"databaseFilename\": \"%s\",\n", indent, cIt->m_DatabaseFilename.Get() );
 		}
 
-		Write( "\t\t\t\t\"limitSymbolsToIncludedHeaders\": %s\n", cIt->m_LimitSymbolsToIncludedHeaders ? "true" : "false" );
+		Write( "%s\t\t\t\"limitSymbolsToIncludedHeaders\": %s,\n", indent, cIt->m_LimitSymbolsToIncludedHeaders ? "true" : "false" );
 
-		Write( "\t\t\t}\n" );
+		Write( "%s\t\t}\n", indent );
 
-		Write( "\t\t}" );
+		Write( "%s\t}", indent );
 	}
 
-	Write( "\n\t],\n" );
+	Write( "\n%s],\n", indent );
+}
 
+// Generate
+//------------------------------------------------------------------------------
+const AString & VSCodeCppPropertiesGenerator::Generate( const Array< VSCodeCppConfig > & configs )
+{
+	m_Tmp.SetReserved( MEGABYTE );
+	m_Tmp.SetLength( 0 );
+
+	Write( "{\n" );
+
+	GenerateCppConfigs( configs, "\t" );
 	Write( "\t\"version\": 3\n" );
+
 	Write( "}\n" );
 
 	return m_Tmp;
@@ -174,7 +209,7 @@ const AString & VSCodeProjectGenerator::Generate( const Array< VSCodeProjectConf
 
 // WritePathList
 //------------------------------------------------------------------------------
-void VSCodeProjectGenerator::WritePathList( const Array< AString > & paths, const char * prefix )
+void VSCodeCppPropertiesGenerator::WritePathList( const Array< AString > & paths, const char * prefix )
 {
 	bool first = true;
 	for ( const AString & path : paths )
@@ -196,7 +231,7 @@ void VSCodeProjectGenerator::WritePathList( const Array< AString > & paths, cons
 
 // WriteStringList
 //------------------------------------------------------------------------------
-void VSCodeProjectGenerator::WriteStringList( const Array< AString > & strings, const char * prefix )
+void VSCodeCppPropertiesGenerator::WriteStringList( const Array< AString > & strings, const char * prefix )
 {
 	bool first = true;
 	for ( const AString & string : strings )
@@ -215,7 +250,7 @@ void VSCodeProjectGenerator::WriteStringList( const Array< AString > & strings, 
 
 // ResolveIncludeFile
 //------------------------------------------------------------------------------
-void VSCodeProjectGenerator::ResolveIncludeFile( const AString & fileName, const Array< AString > & paths, AString & resolved )
+void VSCodeCppPropertiesGenerator::ResolveIncludeFile( const AString & fileName, const Array< AString > & paths, AString & resolved )
 {
 	AString cleanFileName( fileName );
 	NodeGraph::CleanPath( cleanFileName, false );
@@ -241,7 +276,7 @@ void VSCodeProjectGenerator::ResolveIncludeFile( const AString & fileName, const
 
 // ResolveIncludeFiles
 //------------------------------------------------------------------------------
-void VSCodeProjectGenerator::ResolveIncludeFiles( const Array < AString > &fileNames, const Array< AString > & paths, Array< AString > & resolved )
+void VSCodeCppPropertiesGenerator::ResolveIncludeFiles( const Array < AString > &fileNames, const Array< AString > & paths, Array< AString > & resolved )
 {
 	resolved.SetCapacity( fileNames.GetSize() );
 	for ( const AString & fileName : fileNames )

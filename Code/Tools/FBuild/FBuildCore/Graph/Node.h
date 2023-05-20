@@ -83,8 +83,9 @@ public:
         LIST_DEPENDENCIES_NODE = 23,
    		VSCODEPROJECT_NODE	= 24,
 		VSCODEWORKSPACE_NODE = 25,
+        VSCODE_CPP_PROPERTIES_NODE = 26,
         // Make sure you update 's_NodeTypeNames' in the cpp
-        NUM_NODE_TYPES      // leave this last
+    NUM_NODE_TYPES      // leave this last
     };
 
     enum ControlFlag : uint8_t

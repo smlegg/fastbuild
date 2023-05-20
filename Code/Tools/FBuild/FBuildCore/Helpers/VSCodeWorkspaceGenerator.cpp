@@ -32,6 +32,8 @@ const AString & VSCodeWorkspaceGenerator::Generate( const Array< VSCodeProjectNo
 	Write( "\t\"folders\":\n" );
 	Write( "\t[\n" );
 
+	bool haveMultiRootConfigs = false;
+
 	bool first = true;
 	for ( const VSCodeProjectNode * project : projects )
 	{
@@ -55,6 +57,11 @@ const AString & VSCodeWorkspaceGenerator::Generate( const Array< VSCodeProjectNo
 		Write( "\t\t\t\"path\": \"%s\"\n", path.Get() );
 
 		Write( "\t\t}" );
+
+		if (!project->GetConfigs().IsEmpty())
+		{
+			haveMultiRootConfigs = true;
+		}
 	}
 
 	for ( const VSCodeWorkspaceFolder & folder : folders )
@@ -78,9 +85,70 @@ const AString & VSCodeWorkspaceGenerator::Generate( const Array< VSCodeProjectNo
 		Write( "\t\t\t\"path\": \"%s\"\n", path.Get() );
 
 		Write( "\t\t}" );
+
+		if (!folder.m_Configs.IsEmpty())
+		{
+			haveMultiRootConfigs = true;
+		}
 	}
 
-	Write( "\n\t]\n" );
+	Write( "\n\t],\n" );
+
+	if (haveMultiRootConfigs)
+	{
+		Write( "\t\"settings\":\n" );
+		Write( "\t{\n" );
+		Write( "\t\t\"C_Cpp.default.configurationProvider\": \"multi-root-cpp-config-provider\",\n" );
+		Write( "\t\t\"multiRootCppConfig.folders\":\n" );
+		Write( "\t\t[\n" );
+
+		first = true;
+		for ( const VSCodeProjectNode * project : projects )
+		{
+			if (project->GetConfigs().IsEmpty())
+			{
+				continue;
+			}
+
+			if ( !first )
+			{
+				Write( ",\n" );
+			}
+			first = false;
+
+			Write( "\t\t\t{\n");
+			Write( "\t\t\t\t\"name\": \"%s\",\n", project->GetName().Get() );
+
+			GenerateCppConfigs( project->GetConfigs(), "\t\t\t\t" );
+
+			Write( "\t\t\t}" );
+		}
+
+		for ( const VSCodeWorkspaceFolder & folder : folders )
+		{
+			if (folder.m_Configs.IsEmpty())
+			{
+				continue;
+			}
+
+			if ( !first )
+			{
+				Write( ",\n" );
+			}
+			first = false;
+
+			Write( "\t\t\t{\n");
+			Write( "\t\t\t\t\"name\": \"%s\",\n", folder.m_Name.Get() );
+
+			GenerateCppConfigs( folder.m_Configs, "\t\t\t\t" );
+
+			Write( "\t\t\t}" );
+		}
+
+		Write( "\n\t\t]\n" );
+		Write( "\t}\n" );
+	}
+
 	Write( "}\n" );
 
 	return m_Tmp;

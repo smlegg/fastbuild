@@ -4,7 +4,7 @@
 
 // Includes
 //------------------------------------------------------------------------------
-#include "ProjectGeneratorBase.h"
+#include "VSCodeCppPropertiesGenerator.h"
 
 // Forward Declarations
 //------------------------------------------------------------------------------
@@ -13,7 +13,7 @@ struct VSCodeWorkspaceFolder;
 
 // VSCodeProjectGenerator
 //-----------------------------------------------------------------------------
-class VSCodeWorkspaceGenerator : public ProjectGeneratorBase
+class VSCodeWorkspaceGenerator : public VSCodeCppPropertiesGenerator
 {
 public:
 	VSCodeWorkspaceGenerator();

@@ -43,6 +43,9 @@ namespace
                                                     0xFFFFFF, // VSPROJEXTERNAL_NODE
                                                     0xFFFFFF, // TEXT_FILE_NODE
                                                     0xEBABCB, // DIRECTORY_LIST_NODE
+                                                    0xFFFFFF, // VSCODEPROJECT_NODE
+                                                    0xFFFFFF, // VSCODEWORKSPACE_NODE
+                                                    0xFFFFFF, // VSCODE_CPP_PROPERTIES_NODE
                                                  };
     // Ensure color vector is in sync
     static_assert( sizeof( g_ReportNodeColors ) / sizeof( uint32_t ) == Node::NUM_NODE_TYPES, "g_ReportNodeColors item count doesn't match NUM_NODE_TYPES" );

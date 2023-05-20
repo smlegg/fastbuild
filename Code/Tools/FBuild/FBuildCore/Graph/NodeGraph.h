@@ -7,7 +7,7 @@
 #include "Tools/FBuild/FBuildCore/BFF/BFFFileExists.h"
 #include "Tools/FBuild/FBuildCore/Helpers/SLNGenerator.h"
 #include "Tools/FBuild/FBuildCore/Helpers/VSProjectGenerator.h"
-#include "Tools/FBuild/FBuildCore/Helpers/VSCodeProjectGenerator.h"
+#include "Tools/FBuild/FBuildCore/Helpers/VSCodeCppPropertiesGenerator.h"
 #include "Tools/FBuild/FBuildCore/Helpers/VSCodeWorkspaceGenerator.h"
 
 #include "Core/Containers/Array.h"
@@ -50,6 +50,7 @@ class VSProjectExternalNode;
 class XCodeProjectNode;
 class VSCodeProjectNode;
 class VSCodeWorkspaceNode;
+class VSCodeCppPropertiesNode;
 
 // NodeGraphHeader
 //------------------------------------------------------------------------------
@@ -140,6 +141,7 @@ public:
     ListDependenciesNode* CreateListDependenciesNode( const AString& name );
 	VSCodeProjectNode * CreateVSCodeProjectNode( const AString & name );
 	VSCodeWorkspaceNode * CreateVSCodeWorkspaceNode( const AString & name );
+	VSCodeCppPropertiesNode * CreateVSCodeCppPropertiesNode( const AString & name );
     TextFileNode * CreateTextFileNode( const AString & name );
 
     void DoBuildPass( Node * nodeToBuild );

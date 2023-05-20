@@ -37,6 +37,7 @@
 #include "XCodeProjectNode.h"
 #include "VSCodeProjectNode.h"
 #include "VSCodeWorkspaceNode.h"
+#include "VSCodeCppPropertiesNode.h"
 
 // Core
 #include "Core/Containers/UniquePtr.h"
@@ -1108,6 +1109,19 @@ VSCodeWorkspaceNode * NodeGraph::CreateVSCodeWorkspaceNode( const AString & name
 	return node;
 }
 
+// CreateVSCodeCppPropertiesNode
+//------------------------------------------------------------------------------
+VSCodeCppPropertiesNode * NodeGraph::CreateVSCodeCppPropertiesNode( const AString & name )
+{
+	ASSERT( Thread::IsMainThread() );
+    ASSERT( IsCleanPath( name ) );
+
+	VSCodeCppPropertiesNode * node = FNEW( VSCodeCppPropertiesNode() );
+    node->SetName( name );
+	AddNode( node );
+	return node;
+}
+
 // CreateTextFileNode
 //------------------------------------------------------------------------------
 TextFileNode* NodeGraph::CreateTextFileNode( const AString& nodeName )
@@ -1752,8 +1766,8 @@ void NodeGraph::FindNearestNodesInternal( const AString & fullPath, Array< NodeW
     //
     // Some of these things depend on timing, so this check could conceivably run
     // when not stuck, but it will never falsly detect a cyclic dependency.
-    // 
-    
+    //
+
     // Early out if the root node is being processed
     if ( node->GetState() >= Node::State::BUILDING )
     {
@@ -1774,7 +1788,7 @@ void NodeGraph::FindNearestNodesInternal( const AString & fullPath, Array< NodeW
     JobQueue::Get().GetJobStats( numJobs, numJobsActive, numJobsDist, numJobsDistActive );
     if ( ( numJobs > 0 ) ||
          ( numJobsActive > 0 ) ||
-         ( numJobsDist > 0 ) || 
+         ( numJobsDist > 0 ) ||
          ( numJobsDistActive > 0 ) )
     {
         return false;

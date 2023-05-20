@@ -35,6 +35,7 @@
 #include "Tools/FBuild/FBuildCore/Graph/XCodeProjectNode.h"
 #include "Tools/FBuild/FBuildCore/Graph/VSCodeProjectNode.h"
 #include "Tools/FBuild/FBuildCore/Graph/VSCodeWorkspaceNode.h"
+#include "Tools/FBuild/FBuildCore/Graph/VSCodeCppPropertiesNode.h"
 #include "Tools/FBuild/FBuildCore/Graph/MetaData/Meta_AllowNonFile.h"
 #include "Tools/FBuild/FBuildCore/Graph/MetaData/Meta_EmbedMembers.h"
 #include "Tools/FBuild/FBuildCore/Graph/MetaData/Meta_IgnoreForComparison.h"
@@ -89,6 +90,7 @@
     "ListDependencies",
 	"VSCodeProj",
 	"VSCodeWorkspace",
+    "VSCodeCppProperties"
 };
 static Mutex g_NodeEnvStringMutex;
 
@@ -363,6 +365,7 @@ void Node::SetLastBuildTime( uint32_t ms )
         case Node::LIST_DEPENDENCIES_NODE: return nodeGraph.CreateListDependenciesNode( name );
         case Node::VSCODEPROJECT_NODE:  return nodeGraph.CreateVSCodeProjectNode( name );
         case Node::VSCODEWORKSPACE_NODE: return nodeGraph.CreateVSCodeWorkspaceNode( name );
+        case Node::VSCODE_CPP_PROPERTIES_NODE: return nodeGraph.CreateVSCodeCppPropertiesNode( name );
         case Node::NUM_NODE_TYPES:      ASSERT( false ); return nullptr;
     }
 
@@ -465,6 +468,21 @@ void Node::SetLastBuildTime( uint32_t ms )
     // Build time
     const uint32_t lastBuildTime = node->GetLastBuildTime();
     stream.Write( lastBuildTime );
+
+    // Properties
+    const ReflectionInfo * const ri = node->GetReflectionInfoV();
+    Serialize( stream, node, *ri );
+}
+
+// SaveDependencies
+//------------------------------------------------------------------------------
+/*static*/ void Node::SaveDependencies( IOStream & stream, const Node * node )
+{
+    // FileNodes have no dependencies
+    if ( node->GetType() == Node::FILE_NODE )
+    {
+        return;
+    }
 
     // Deps
     node->m_PreBuildDependencies.Save( stream );
