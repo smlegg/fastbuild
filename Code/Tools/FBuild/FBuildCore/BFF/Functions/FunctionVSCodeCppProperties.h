@@ -17,7 +17,7 @@ class FunctionVSCodeCppProperties : public Function
 {
 public:
 	explicit		FunctionVSCodeCppProperties();
-	inline virtual ~FunctionVSCodeCppProperties() = default;
+	inline virtual ~FunctionVSCodeCppProperties() override = default;
 
 protected:
 	virtual bool AcceptsHeader() const override;

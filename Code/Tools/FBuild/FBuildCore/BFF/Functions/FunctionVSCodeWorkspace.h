@@ -17,7 +17,7 @@ class FunctionVSCodeWorkspace : public Function
 {
 public:
 	explicit		FunctionVSCodeWorkspace();
-	inline virtual ~FunctionVSCodeWorkspace() = default;
+	inline virtual ~FunctionVSCodeWorkspace() override = default;
 
 protected:
 	virtual bool AcceptsHeader() const override;
