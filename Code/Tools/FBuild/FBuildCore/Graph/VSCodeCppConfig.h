@@ -19,6 +19,7 @@ struct VSCodeCppConfig
 	Array< AString > m_ForcedInclude;
 	AString m_Compiler;
 	Array< AString > m_CompilerArgs;
+	AString m_CppStandard;
 	AString m_IntellisenseMode;
 	bool m_LimitSymbolsToIncludedHeaders;
 	AString m_DatabaseFilename;

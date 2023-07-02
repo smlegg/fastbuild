@@ -148,18 +148,25 @@ void VSCodeCppPropertiesGenerator::GenerateCppConfigs( const Array< VSCodeCppCon
 			Write( "%s\t\t\"intelliSenseMode\": \"%s\",\n", indent, cIt->m_IntellisenseMode.Get() );
 		}
 
-		if ( oln )
+		if ( cIt->m_CppStandard.IsEmpty() == false )
 		{
-			StackArray< AString, 2 > prefixes;
-			prefixes.EmplaceBack( "-std=" );
-			prefixes.EmplaceBack( "/std:" );
-
-			Array< AString > standard;
-			ProjectGeneratorBase::ExtractIntellisenseOptions( oln->GetCompilerOptions(), prefixes, standard, false, false );
-
-			if ( standard.IsEmpty() == false )
+			Write( "%s\t\t\"cppStandard\": \"%s\",\n", indent, cIt->m_CppStandard.Get() );
+		}
+		else
+		{
+			if ( oln )
 			{
-				Write( "%s\t\t\"cppStandard\": \"%s\",\n", indent, standard[0].Get() );
+				StackArray< AString, 2 > prefixes;
+				prefixes.EmplaceBack( "-std=" );
+				prefixes.EmplaceBack( "/std:" );
+
+				Array< AString > standard;
+				ProjectGeneratorBase::ExtractIntellisenseOptions( oln->GetCompilerOptions(), prefixes, standard, false, false );
+
+				if ( standard.IsEmpty() == false )
+				{
+					Write( "%s\t\t\"cppStandard\": \"%s\",\n", indent, standard[0].Get() );
+				}
 			}
 		}
 
