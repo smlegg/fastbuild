@@ -6,7 +6,8 @@
 #if __LINUX__ && !CI_BUILD
     //#define USING_CLANG_3
     //#define USING_CLANG_6
-    #define USING_CLANG_10
+    //#define USING_CLANG_10
+    #define USING_CLANG_DEFAULT
 #endif
 #if __OSX__ && !CI_BUILD
     #define USING_CLANG_8
@@ -36,6 +37,9 @@
     #endif
     #if USING_CLANG_10
         #include "Linux/Clang10.bff"
+    #endif
+    #if USING_CLANG_DEFAULT
+        #include "Linux/ClangDefault.bff"
     #endif
 #endif
 #if __OSX__
