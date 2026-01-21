@@ -60,6 +60,7 @@ CopyFileNode::~CopyFileNode() = default;
     EmitCopyMessage();
 
     // copy the file
+    FileIO::EnsurePathExistsForFile(m_Name);
     if ( FileIO::FileCopy( GetSourceNode()->GetName().Get(), m_Name.Get() ) == false )
     {
         FLOG_ERROR( "Copy failed. Error: %s Target: '%s'", LAST_ERROR_STR, GetName().Get() );
