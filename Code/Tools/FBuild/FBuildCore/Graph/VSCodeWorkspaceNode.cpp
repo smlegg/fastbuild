@@ -17,6 +17,7 @@ REFLECT_STRUCT_BEGIN_BASE( VSCodeWorkspaceFolder )
 	REFLECT( m_Path, "Path", MetaPath() )
 	REFLECT( m_Name, "Name", MetaOptional() )
 	REFLECT_ARRAY_OF_STRUCT( m_Configs, "CppConfigs", VSCodeCppConfig, MetaOptional() )
+	REFLECT_ARRAY( m_SlangIncludePath, "SlangIncludePath", MetaOptional() )
 REFLECT_END( VSCodeWorkspaceFolder )
 
 REFLECT_NODE_BEGIN( VSCodeWorkspaceNode, Node, MetaName("WorkspaceOutput") + MetaFile() )

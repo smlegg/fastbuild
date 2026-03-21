@@ -21,6 +21,7 @@ public:
 	AString m_Path;
 	AString m_Name;
 	Array< VSCodeCppConfig > m_Configs;
+	Array< AString > m_SlangIncludePath;
 };
 
 // VSCodeWorkspaceNode

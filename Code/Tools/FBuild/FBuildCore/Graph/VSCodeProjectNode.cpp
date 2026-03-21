@@ -14,7 +14,8 @@ REFLECT_NODE_BEGIN( VSCodeProjectNode, Node, MetaNone() )
 	REFLECT( m_ProjectPath, "ProjectPath", MetaPath() )
 	REFLECT( m_ProjectName, "ProjectName", MetaOptional() )
 	REFLECT_ARRAY_OF_STRUCT( m_Configs, "CppConfigs", VSCodeCppConfig, MetaOptional() )
-    REFLECT_ARRAY(  m_PreBuildDependencyNames,  "PreBuildDependencies", MetaOptional() + MetaFile() + MetaAllowNonFile() )
+    REFLECT_ARRAY( m_SlangIncludePath, "SlangIncludePath", MetaOptional() + MetaPath() )
+    REFLECT_ARRAY( m_PreBuildDependencyNames,  "PreBuildDependencies", MetaOptional() + MetaFile() + MetaAllowNonFile() )
 REFLECT_END( VSCodeProjectNode )
 
 // CONSTRUCTOR
