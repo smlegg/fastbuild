@@ -10,6 +10,7 @@
 //------------------------------------------------------------------------------
 class VSCodeProjectNode;
 struct VSCodeWorkspaceFolder;
+struct VSCodeClangDConfig;
 
 // VSCodeProjectGenerator
 //-----------------------------------------------------------------------------
@@ -20,5 +21,8 @@ public:
 	~VSCodeWorkspaceGenerator();
 
 	const AString & Generate( const Array< VSCodeProjectNode * > & projects,
-							  const Array< VSCodeWorkspaceFolder > & folders );
+							  const Array< VSCodeWorkspaceFolder > & folders,
+							  const AString & clangDPath,
+							  const AString & compileCommandsPath,
+							  const Array< VSCodeClangDConfig > & clangDConfigs );
 };

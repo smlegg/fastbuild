@@ -8,6 +8,7 @@
 #include "Core/Containers/UnorderedMap.h"
 #include "Tools/FBuild/FBuildCore/Graph/VSCodeProjectNode.h"
 #include "Tools/FBuild/FBuildCore/Graph/VSCodeWorkspaceNode.h"
+#include "Tools/FBuild/FBuildCore/Graph/VSCodeClangDConfig.h"
 
 
 // CONSTRUCTOR
@@ -23,7 +24,10 @@ VSCodeWorkspaceGenerator::~VSCodeWorkspaceGenerator() = default;
 // Generate
 //------------------------------------------------------------------------------
 const AString & VSCodeWorkspaceGenerator::Generate( const Array< VSCodeProjectNode * > & projects,
-													const Array< VSCodeWorkspaceFolder > & folders )
+													const Array< VSCodeWorkspaceFolder > & folders,
+													const AString & clangDPath,
+													const AString & compileCommandsPath,
+													const Array< VSCodeClangDConfig > & clangDConfigs )
 {
 	m_Tmp.SetReserved( MEGABYTE );
 	m_Tmp.SetLength( 0 );
@@ -104,13 +108,15 @@ const AString & VSCodeWorkspaceGenerator::Generate( const Array< VSCodeProjectNo
 
 	Write( "\n\t],\n" );
 
-	if (haveMultiRootCppConfigs || haveMultiRootSlangConfigs)
+	if (haveMultiRootCppConfigs || !clangDConfigs.IsEmpty() || haveMultiRootSlangConfigs)
 	{
 		Write( "\t\"settings\":\n" );
 		Write( "\t{\n" );
 
 		if (haveMultiRootCppConfigs)
 		{
+			Write( "\t\t\"C_Cpp.intellisenseEngine\n\": \"enabled\",\n" );
+			Write( "\t\t\"clangd.enable\": false,\n" );
 			Write( "\t\t\"C_Cpp.default.configurationProvider\": \"multi-root-cpp-config-provider\",\n" );
 			Write( "\t\t\"multiRootCppConfig.folders\":\n" );
 			Write( "\t\t[\n" );
@@ -159,13 +165,66 @@ const AString & VSCodeWorkspaceGenerator::Generate( const Array< VSCodeProjectNo
 			}
 
 			Write( "\n\t\t]" );
+		} else if ( !clangDConfigs.IsEmpty() )
+		{
+			Write( "\t\t\"C_Cpp.intelliSenseEngine\": \"disabled\",\n" );
+			Write( "\t\t\"clangd.enable\": true,\n" );
+
+			if ( !clangDPath.IsEmpty() )
+			{
+				AString path( clangDPath );
+				path.Replace( '\\', '/' );
+
+				Write( "\t\t\"clangd.path\": \"%s\",\n", path.Get() );
+			}
+
+			if ( !compileCommandsPath.IsEmpty() )
+			{
+				AString path( compileCommandsPath );
+				path.Replace( '\\', '/' );
+
+				Write( "\t\t\"clangd.arguments\":\n" );
+				Write( "\t\t[\n" );
+				Write( "\t\t\t\"--compile-commands-dir=%s\"\n", path.Get() );
+				Write( "\t\t],\n" );
+			}
+
+			Write( "\t\t\"multiRootCppConfig.clangd\":\n" );
+			Write( "\t\t{\n" );
+			Write( "\t\t\t\"configurations\":\n" );
+			Write( "\t\t\t[\n" );
+
+			first = true;
+			for ( const VSCodeClangDConfig & config : clangDConfigs )
+			{
+				if ( !first )
+				{
+					Write( ",\n" );
+				}
+				first = false;
+
+				Write( "\t\t\t\t{\n");
+				Write( "\t\t\t\t\t\"name\": \"%s\",\n", config.m_Name.Get() );
+				Write( "\t\t\t\t\t\"command\": \"%s\",\n", config.m_Command.Get() );
+				if ( !config.m_CWD.IsEmpty() )
+				{
+					AString path( config.m_CWD );
+					path.Replace( '\\', '/' );
+					Write( "\t\t\t\t\t\"cwd\": \"%s\",\n", path.Get() );
+				}
+				Write( "\t\t\t\t}");
+			}
+
+			Write( "\n\t\t\t]\n" );
+			Write( "\t\t}" );
+
 		}
 
 		if (haveMultiRootSlangConfigs)
 		{
 			UnorderedMap<AString, bool> includePaths;
 
-			if (haveMultiRootCppConfigs)
+			if (haveMultiRootCppConfigs || !clangDConfigs.IsEmpty() )
 			{
 				Write(",\n");
 			}

@@ -8,6 +8,7 @@
 // FBuildCore
 #include "Tools/FBuild/FBuildCore/Helpers/VSCodeWorkspaceGenerator.h"
 #include "Tools/FBuild/FBuildCore/Graph/VSCodeCppConfig.h"
+#include "Tools/FBuild/FBuildCore/Graph/VSCodeClangDConfig.h"
 
 // VSCodeFolder
 //-----------------------------------------------------------------------------
@@ -46,4 +47,7 @@ private:
 	Array< AString > m_Projects;
 	Array< VSCodeProjectNode * > m_ProjectNodes;
 	Array< VSCodeWorkspaceFolder > m_Folders;
+	AString m_ClangDPath;
+	AString m_CompileCommandsPath;
+	Array< VSCodeClangDConfig > m_ClangDConfigs;
 };
