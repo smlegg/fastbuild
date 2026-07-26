@@ -26,6 +26,7 @@ VSCodeWorkspaceGenerator::~VSCodeWorkspaceGenerator() = default;
 const AString & VSCodeWorkspaceGenerator::Generate( const Array< VSCodeProjectNode * > & projects,
 													const Array< VSCodeWorkspaceFolder > & folders,
 													const AString & clangDPath,
+													const Array< AString > & clangDArgs,
 													const AString & compileCommandsPath,
 													const Array< VSCodeClangDConfig > & clangDConfigs )
 {
@@ -185,8 +186,12 @@ const AString & VSCodeWorkspaceGenerator::Generate( const Array< VSCodeProjectNo
 
 				Write( "\t\t\"clangd.arguments\":\n" );
 				Write( "\t\t[\n" );
-				Write( "\t\t\t\"--compile-commands-dir=%s\"\n", path.Get() );
-				Write( "\t\t],\n" );
+				Write( "\t\t\t\"--compile-commands-dir=%s\"", path.Get() );
+				for ( const AString &arg : clangDArgs )
+				{
+					Write( ",\n\t\t\t\"%s\"", arg.Get() );
+				}
+				Write( "\n\t\t],\n" );
 			}
 
 			Write( "\t\t\"multiRootCppConfig.clangd\":\n" );

@@ -48,6 +48,7 @@ private:
 	Array< VSCodeProjectNode * > m_ProjectNodes;
 	Array< VSCodeWorkspaceFolder > m_Folders;
 	AString m_ClangDPath;
+	Array< AString > m_ClangDArgs;
 	AString m_CompileCommandsPath;
 	Array< VSCodeClangDConfig > m_ClangDConfigs;
 };

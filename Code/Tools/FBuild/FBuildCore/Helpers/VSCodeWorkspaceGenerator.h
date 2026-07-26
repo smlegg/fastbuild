@@ -23,6 +23,7 @@ public:
 	const AString & Generate( const Array< VSCodeProjectNode * > & projects,
 							  const Array< VSCodeWorkspaceFolder > & folders,
 							  const AString & clangDPath,
+							  const Array< AString > & clangDArgs,
 							  const AString & compileCommandsPath,
 							  const Array< VSCodeClangDConfig > & clangDConfigs );
 };

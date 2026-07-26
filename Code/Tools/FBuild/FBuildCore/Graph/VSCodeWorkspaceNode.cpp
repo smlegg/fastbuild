@@ -24,6 +24,7 @@ REFLECT_NODE_BEGIN( VSCodeWorkspaceNode, Node, MetaName("WorkspaceOutput") + Met
 	REFLECT_ARRAY( m_Projects, "WorkspaceProjects", MetaNone() )
 	REFLECT_ARRAY_OF_STRUCT( m_Folders, "WorkspaceFolders", VSCodeWorkspaceFolder, MetaNone() )
 	REFLECT( m_ClangDPath, "ClangDPath", MetaOptional() + MetaFile() )
+	REFLECT_ARRAY( m_ClangDArgs, "ClangDArgs", MetaOptional() )
 	REFLECT( m_CompileCommandsPath, "CompileCommandsPath", MetaOptional() + MetaPath() )
 	REFLECT_ARRAY_OF_STRUCT( m_ClangDConfigs, "ClangDConfigs", VSCodeClangDConfig, MetaOptional() )
 REFLECT_END( VSCodeWorkspaceNode )
@@ -119,7 +120,7 @@ VSCodeWorkspaceNode::~VSCodeWorkspaceNode() = default;
 	}
 
 	// Generate output file
-	const AString & output = g.Generate( projects, m_Folders, m_ClangDPath, m_CompileCommandsPath, m_ClangDConfigs );
+	const AString & output = g.Generate( projects, m_Folders, m_ClangDPath, m_ClangDArgs, m_CompileCommandsPath, m_ClangDConfigs );
 	if ( ProjectGeneratorBase::WriteIfDifferent( "VSCodeWorkspace", output, m_Name ) == false )
 	{
 		return Node::NODE_RESULT_FAILED; // WriteIfDifferent will have emitted an error
